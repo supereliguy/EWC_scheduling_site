@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .admin-nav { margin-bottom: 20px; }
+        .admin-nav button { margin-right: 10px; }
+        .section { display: none; margin-top: 20px; border: 1px solid #ccc; padding: 20px; }
+        .active { display: block; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .form-inline { display: flex; gap: 10px; margin-bottom: 10px; align-items: flex-end; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h1>Admin Dashboard</h1>
+            <button id="logout-btn">Logout</button>
+        </div>
+
+        <div class="admin-nav">
+            <button onclick="showSection('users-section')">Users</button>
+            <button onclick="showSection('sites-section')">Sites & Shifts</button>
+            <button onclick="showSection('schedule-section')">Schedule</button>
+            <a href="/index.html"><button>View User Dashboard</button></a>
+        </div>
+
+        <!-- Users Section -->
+        <div id="users-section" class="section active">
+            <h2>Manage Users</h2>
+            <div class="form-inline">
+                <input type="text" id="new-username" placeholder="Username">
+                <input type="password" id="new-password" placeholder="Password">
+                <select id="new-role"><option value="user">User</option><option value="admin">Admin</option></select>
+                <button id="create-user-btn">Create User</button>
+            </div>
+            <table id="users-table">
+                <thead><tr><th>ID</th><th>Username</th><th>Role</th><th>Actions</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <!-- Sites & Shifts Section -->
+        <div id="sites-section" class="section">
+            <h2>Manage Sites</h2>
+            <div class="form-inline">
+                <input type="text" id="new-site-name" placeholder="Site Name">
+                <input type="text" id="new-site-desc" placeholder="Description">
+                <button id="create-site-btn">Create Site</button>
+            </div>
+            <table id="sites-table">
+                <thead><tr><th>ID</th><th>Name</th><th>Description</th><th>Actions</th></tr></thead>
+                <tbody></tbody>
+            </table>
+
+            <hr>
+            <h3>Manage Shifts</h3>
+            <div class="form-inline">
+                <select id="shift-site-select"><option value="">Select Site</option></select>
+                <input type="text" id="new-shift-name" placeholder="Shift Name">
+                <input type="time" id="new-shift-start" value="08:00">
+                <input type="time" id="new-shift-end" value="16:00">
+                <input type="number" id="new-shift-staff" placeholder="Staff Count" value="1" min="1" style="width: 60px;">
+                <button id="create-shift-btn">Create Shift</button>
+            </div>
+            <table id="shifts-table">
+                <thead><tr><th>ID</th><th>Site</th><th>Name</th><th>Times</th><th>Staff</th><th>Actions</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <!-- Schedule Section -->
+        <div id="schedule-section" class="section">
+            <h2>Schedule Management</h2>
+            <div class="form-inline">
+                <select id="schedule-site-select"><option value="">Select Site</option></select>
+                <select id="schedule-year"></select>
+                <select id="schedule-month"></select>
+                <button id="view-schedule-btn">View</button>
+                <button id="generate-schedule-btn" style="background-color: #ff9800; color: white;">Generate</button>
+                <button id="publish-schedule-btn" style="background-color: #4CAF50; color: white;">Publish</button>
+                <button id="export-csv-btn">Export CSV</button>
+            </div>
+            <div id="schedule-display"></div>
+        </div>
+    </div>
+    <script src="admin.js"></script>
+</body>
+</html>
