@@ -70,6 +70,17 @@ const initDb = () => {
         )
     `);
 
+    // User Settings table
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS user_settings (
+            user_id INTEGER PRIMARY KEY,
+            max_consecutive_shifts INTEGER DEFAULT 5,
+            min_days_off INTEGER DEFAULT 2,
+            night_preference REAL DEFAULT 1.0, -- 1.0 = neutral, >1.0 = prefers night, <1.0 = dislikes night
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    `);
+
     console.log('Database initialized.');
 };
 

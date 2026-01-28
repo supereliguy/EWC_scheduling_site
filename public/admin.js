@@ -1,6 +1,7 @@
 const api = {
     get: (url) => fetch(url).then(r => r.json()),
     post: (url, data) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then(r => r.json()),
+    put: (url, data) => fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then(r => r.json()),
     delete: (url) => fetch(url, { method: 'DELETE' }).then(r => r.json())
 };
 
@@ -66,11 +67,47 @@ function renderUsers() {
                 <td>${u.id}</td>
                 <td>${u.username}</td>
                 <td>${u.role}</td>
-                <td><button onclick="deleteUser(${u.id})">Delete</button></td>
+                <td>
+                    <button onclick="openSettings(${u.id})">Settings</button>
+                    <button onclick="deleteUser(${u.id})">Delete</button>
+                </td>
             </tr>
         `;
     });
 }
+
+window.openSettings = async (id) => {
+    const data = await api.get(`/api/users/${id}/settings`);
+    if(data.settings) {
+        document.getElementById('settings-user-id').value = id;
+        document.getElementById('setting-max-consecutive').value = data.settings.max_consecutive_shifts;
+        document.getElementById('setting-min-days-off').value = data.settings.min_days_off;
+        document.getElementById('setting-night-pref').value = data.settings.night_preference;
+        document.getElementById('settings-modal').style.display = 'flex';
+    } else {
+        alert('Could not load settings');
+    }
+};
+
+window.closeSettingsModal = () => {
+    document.getElementById('settings-modal').style.display = 'none';
+};
+
+window.saveSettings = async () => {
+    const id = document.getElementById('settings-user-id').value;
+    const max_consecutive_shifts = document.getElementById('setting-max-consecutive').value;
+    const min_days_off = document.getElementById('setting-min-days-off').value;
+    const night_preference = document.getElementById('setting-night-pref').value;
+
+    const res = await api.put(`/api/users/${id}/settings`, {
+        max_consecutive_shifts,
+        min_days_off,
+        night_preference
+    });
+
+    alert(res.message);
+    closeSettingsModal();
+};
 
 document.getElementById('create-user-btn').addEventListener('click', async () => {
     const username = document.getElementById('new-username').value;

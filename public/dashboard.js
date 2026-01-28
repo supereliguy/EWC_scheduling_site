@@ -193,72 +193,17 @@ function applyPaint(dayEl) {
 
 async function submitRequests() {
     if (!currentSiteId) return;
-    // Prepare bulk update
-    // We send ALL requests for this month? Or just the ones in state?
-    // The API is bulk insert/replace.
-    // Ideally we should only send what changed, but sending all for the month is safer to sync state.
-    // However, the state `requests` only contains loaded requests + changes.
-    // If we cleared a request, it's removed from `requests` array.
-    // But the API `INSERT OR REPLACE` won't delete the cleared ones if we don't send them.
-    // Wait, my API implementation is `INSERT OR REPLACE`. It doesn't delete missing ones.
-    // I need to handle "Clear".
-    // "Clear" simply means no row in DB.
-    // To implement "Clear" properly with `INSERT OR REPLACE`, I might need to delete first?
-    // Or I should have an endpoint to delete requests.
-    // Or I can just delete all requests for this user/site/month and re-insert.
-    // The current `requests` array represents the *desired* state for this month.
 
-    // Let's change API to support full sync for a month?
-    // Or simpler: I will assume the `requests` array is what the user wants.
-    // I'll add logic to server to clear old requests? No, that's too much backend change now.
-    // Workaround: When painting 'clear', we don't add to `requests`.
-    // But the old request remains in DB.
-    // I need to send explicit "delete" or update my backend to clear month before insert.
-
-    // I'll update the backend to clear existing requests for the month before inserting new ones?
-    // That's risky if I only send partial data.
-
-    // Let's stick to: "Submit" sends a list of active requests.
-    // AND I need to handle deletions.
-    // Maybe I should just send `type: 'none'` for cleared ones?
-    // And backend deletes them?
-
-    // I'll update `applyPaint`: if clear, push `type: 'clear'`.
-    // And update backend to delete if type is 'clear'.
-
-    // For now, I'll just alert that "Clear" might not persist if I don't fix backend.
-    // Let's fix backend. It's robust.
-
-    // Better plan:
-    // 1. Update `dashboard.js` to include 'clear' type in requests list.
-    // 2. Update `server.js` `POST /api/requests` to `DELETE` if type is 'clear'.
-
-    // Actually, I can't easily change `server.js` logic blindly.
-    // Let's try this:
-    // I will modify `applyPaint` to NOT remove from array, but update type to 'clear'.
-    // Then in `submitRequests`, I filter.
-    // Wait, if I delete from array, I lose track.
-
-    const validRequests = requests.filter(r => r.type !== 'clear');
-
-    // This doesn't solve deleting existing DB rows.
-
-    // QUICK FIX:
-    // Client sends ALL requests.
-    // I'll just rely on `INSERT OR REPLACE`.
-    // If I want to clear, I need to send a delete.
-    // I'll implement a `DELETE` call for specific date if I really need to.
-
-    // Or, I can just leave it as is: You can change Work->Off or Off->Work.
-    // "Clear" is just visual for now unless I fix it.
-    // I'll assume for this task that Work/Off is the main thing.
-    // But "Clear" is in the UI.
-
-    // I'll change `dashboard.js` to send `type: 'none'` for clear.
-    // And `server.js` to delete if `type === 'none'`.
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth() + 1;
 
     const payload = requests.map(r => r);
-    const res = await api.post('/api/requests', { siteId: currentSiteId, requests: payload });
+    const res = await api.post('/api/requests', {
+        siteId: currentSiteId,
+        requests: payload,
+        month,
+        year
+    });
     alert(res.message);
     loadData(); // Reload to sync
 }
