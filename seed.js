@@ -1,4 +1,4 @@
-const db = require('./database');
+const db = require('./src/db');
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 
