@@ -95,9 +95,19 @@ window.closeSettingsModal = () => {
 
 window.saveSettings = async () => {
     const id = document.getElementById('settings-user-id').value;
-    const max_consecutive_shifts = document.getElementById('setting-max-consecutive').value;
-    const min_days_off = document.getElementById('setting-min-days-off').value;
-    const night_preference = document.getElementById('setting-night-pref').value;
+    const max_consecutive_shifts = parseInt(document.getElementById('setting-max-consecutive').value, 10);
+    const min_days_off = parseInt(document.getElementById('setting-min-days-off').value, 10);
+    const night_preference = parseFloat(document.getElementById('setting-night-pref').value);
+
+    if (isNaN(max_consecutive_shifts) || max_consecutive_shifts < 1) {
+        return alert('Max Consecutive Shifts must be a number >= 1');
+    }
+    if (isNaN(min_days_off) || min_days_off < 0) {
+        return alert('Min Days Off must be a number >= 0');
+    }
+    if (isNaN(night_preference) || night_preference <= 0) {
+        return alert('Night Preference must be a number > 0');
+    }
 
     const res = await api.put(`/api/users/${id}/settings`, {
         max_consecutive_shifts,
