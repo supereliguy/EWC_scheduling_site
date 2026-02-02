@@ -1,46 +1,82 @@
-# Node.js Schedule App
+# Schedule Manager
 
-A robust scheduling application built with Node.js, Express, and SQLite.
+A Node.js web application for managing work schedules. It allows users to submit schedule requests (Work/Off) and administrators to generate, view, and publish schedules using an automated algorithm.
 
 ## Features
-- **User Interface**: Submit work/off requests, view personal schedule.
-- **Admin Interface**: Manage users, sites, shifts, and generate schedules.
-- **Scheduler**: Randomized Greedy algorithm with restarts, respecting user preferences (Night/Day weight, Max consecutive shifts, Min days off).
+
+*   **User Dashboard:** Users can log in, view the calendar, and submit requests for specific days (Work/Off).
+*   **Admin Dashboard:** Administrators can manage users, sites, and shifts.
+*   **Automated Scheduling:** Uses a randomized greedy algorithm with restarts to generate schedules that respect user constraints and preferences.
+*   **iCal Subscription:** Users can subscribe to their work schedule via a private iCal feed.
+*   **Export:** Schedules can be exported to CSV.
+
+## Prerequisites
+
+*   [Node.js](https://nodejs.org/) (v16 or higher recommended)
+*   npm (comes with Node.js)
 
 ## Installation
 
-1. Install dependencies:
-   ```bash
-   npm install
-   ```
+1.  **Clone the repository:**
+    ```bash
+    git clone <repository_url>
+    cd <repository_name>
+    ```
 
-2. Initialize the database:
-   ```bash
-   node seed.js
-   ```
+2.  **Install dependencies:**
+    ```bash
+    npm install
+    ```
 
-3. Start the server:
-   ```bash
-   npm start
-   ```
+3.  **Initialize the Database:**
+    Run the seed script to create the SQLite database (`schedule.db`) and the initial admin user.
+    ```bash
+    node seed.js
+    ```
+    *   **Default Admin Credentials:**
+        *   Username: `admin`
+        *   Password: `password123`
 
-4. Open your browser to `http://localhost:3000`.
+## Running the Application
+
+1.  **Start the server:**
+    ```bash
+    npm start
+    ```
+    The server will start on port 3000 (default).
+
+2.  **Access the application:**
+    Open your browser and navigate to `http://localhost:3000`.
 
 ## Usage
 
-### Admin Login
-- **Username**: `admin`
-- **Password**: `password123`
+### As a User:
+1.  Go to `http://localhost:3000/login.html`.
+2.  Log in with your credentials (provided by an admin).
+3.  Use the calendar to click and "paint" your requests:
+    *   **Work (Blue):** Request to work this day.
+    *   **Off (Red):** Request to be off this day.
+    *   **Clear:** Clear any request.
+4.  Click **Submit Requests** to save.
+5.  Once the schedule is published, switch to **View Schedule** mode to see your assigned shifts.
 
-### Workflow
-1. Log in as Admin.
-2. Go to "Sites & Shifts" to create a Site and its Shifts.
-3. Go to "Users" to create user accounts.
-4. Users log in to submit requests.
-5. Admin goes to "Schedule", selects Month/Year, and clicks "Generate".
-6. Admin publishes the schedule.
+### As an Admin:
+1.  Log in as `admin`.
+2.  Navigate to `http://localhost:3000/admin.html`.
+3.  **Users:** Create new users and manage roles.
+4.  **Sites & Shifts:** Create sites (e.g., "Main Hospital") and define shifts (e.g., "Day Shift 08:00-16:00").
+5.  **Schedule:**
+    *   Select a Site, Year, and Month.
+    *   **Generate:** Run the algorithm to create a draft schedule.
+    *   **View:** See the current draft or published schedule.
+    *   **Publish:** Make the schedule visible to users.
 
-## Tech Stack
-- **Backend**: Node.js, Express
-- **Database**: SQLite (better-sqlite3)
-- **Frontend**: HTML/CSS/JS (Vanilla)
+## Project Structure
+
+*   `server.js`: Application entry point.
+*   `src/`: Backend source code.
+    *   `app.js`: Express app setup.
+    *   `db.js`: Database connection and schema.
+    *   `routes/`: API endpoints.
+    *   `lib/scheduler.js`: Scheduling algorithm.
+*   `public/`: Frontend static files (HTML, CSS, JS).
