@@ -61,12 +61,26 @@
                 <div class="list-group shadow-sm">
                     <button class="list-group-item list-group-item-action py-3 fw-bold active" onclick="showSection('users-section', this)">Users</button>
                     <button class="list-group-item list-group-item-action py-3 fw-bold" onclick="showSection('sites-section', this)">Sites & Shifts</button>
-                    <button class="list-group-item list-group-item-action py-3 fw-bold" onclick="openGlobalSettings()">Global Settings</button>
+                    <button class="list-group-item list-group-item-action py-3 fw-bold" onclick="loadGlobalSettings(this)">Global Settings</button>
                 </div>
             </div>
 
             <!-- Main Content -->
             <div class="col-md-10">
+
+                <!-- Global Settings Section -->
+                <div id="global-settings-section" class="section-content">
+                    <h3>Global Scheduling Defaults</h3>
+                    <p class="text-muted small">These settings apply to users who have not set specific preferences.</p>
+                    <div class="row" style="max-width: 600px;">
+                        <div class="col-12 mb-3"><label>Max Consecutive Shifts</label><input type="number" class="form-control" id="gs-max-consecutive"></div>
+                        <div class="col-12 mb-3"><label>Min Days Off</label><input type="number" class="form-control" id="gs-min-days-off"></div>
+                        <div class="col-12 mb-3"><label>Target Shifts</label><input type="number" class="form-control" id="gs-target-shifts"></div>
+                        <div class="col-12 mb-3"><label>Target Variance</label><input type="number" class="form-control" id="gs-variance"></div>
+                        <div class="col-12 mb-3"><label>Preferred Block Size</label><input type="number" class="form-control" id="gs-block-size"></div>
+                        <div class="col-12 mt-3"><button type="button" class="btn btn-primary" onclick="saveGlobalSettings()">Save Defaults</button></div>
+                    </div>
+                </div>
 
                 <!-- Users Section -->
                 <div id="users-section" class="section-content" style="display:block;">
@@ -172,25 +186,6 @@
         </div>
     </div>
 
-    <!-- Global Settings Modal -->
-    <div class="modal fade" id="globalSettingsModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header"><h5 class="modal-title">Global Scheduling Defaults</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-                <div class="modal-body">
-                    <p class="text-muted small">These settings apply to users who have not set specific preferences.</p>
-                    <div class="mb-2"><label>Max Consecutive Shifts</label><input type="number" class="form-control" id="gs-max-consecutive"></div>
-                    <div class="mb-2"><label>Min Days Off</label><input type="number" class="form-control" id="gs-min-days-off"></div>
-                    <div class="mb-2"><label>Target Shifts</label><input type="number" class="form-control" id="gs-target-shifts"></div>
-                    <div class="mb-2"><label>Target Variance</label><input type="number" class="form-control" id="gs-variance"></div>
-                    <div class="mb-2"><label>Preferred Block Size</label><input type="number" class="form-control" id="gs-block-size"></div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-primary" onclick="saveGlobalSettings()">Save Defaults</button>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <!-- Modals -->
     <!-- Site Users Modal -->

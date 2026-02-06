@@ -94,7 +94,10 @@ window.saveSettings = async () => {
 };
 
 // Global Settings
-window.openGlobalSettings = async () => {
+window.loadGlobalSettings = async (btn) => {
+    // Switch view
+    if (window.showSection) window.showSection('global-settings-section', btn);
+
     const data = await apiClient.get('/api/settings/global');
     if(data.settings) {
         const s = data.settings;
@@ -103,9 +106,6 @@ window.openGlobalSettings = async () => {
         document.getElementById('gs-target-shifts').value = s.target_shifts;
         document.getElementById('gs-variance').value = s.target_shifts_variance;
         document.getElementById('gs-block-size').value = s.preferred_block_size;
-
-        const modal = new bootstrap.Modal(document.getElementById('globalSettingsModal'));
-        modal.show();
     }
 };
 
@@ -122,8 +122,6 @@ window.saveGlobalSettings = async () => {
     try {
         const res = await apiClient.put('/api/settings/global', body);
         alert(res.message);
-        const modal = bootstrap.Modal.getInstance(document.getElementById('globalSettingsModal'));
-        modal.hide();
     } catch(e) { alert(e.message); }
 };
 

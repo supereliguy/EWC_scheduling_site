@@ -2,6 +2,7 @@
 class DBWrapper {
     constructor() {
         this.db = null;
+        this.inTransaction = false;
     }
 
     async init() {
@@ -197,7 +198,9 @@ class DBWrapper {
                 // The `transaction` method handles batching.
                 // We'll call save() manually in the API router for now, or debounce it.
                 // For strict safety:
-                this.save();
+                if (!this.inTransaction) {
+                    this.save();
+                }
 
                 return { lastInsertRowid: lastId, changes: this.db.getRowsModified() };
             },
@@ -214,14 +217,17 @@ class DBWrapper {
 
     transaction(fn) {
         return (...args) => {
+            this.inTransaction = true;
             this.db.exec("BEGIN TRANSACTION");
             try {
                 const result = fn(...args);
                 this.db.exec("COMMIT");
+                this.inTransaction = false;
                 this.save();
                 return result;
             } catch (e) {
                 this.db.exec("ROLLBACK");
+                this.inTransaction = false;
                 throw e;
             }
         };
