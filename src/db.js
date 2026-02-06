@@ -1,6 +1,10 @@
 const Database = require('better-sqlite3');
+const path = require('path');
 
-const db = new Database('schedule.db', { verbose: console.log });
+const dbPath = process.env.DB_PATH || path.join(process.cwd(), 'schedule.db');
+console.log(`Initializing Database at: ${dbPath}`);
+
+const db = new Database(dbPath, { verbose: console.log });
 
 // Initialize tables
 const initDb = () => {

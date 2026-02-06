@@ -1,5 +1,26 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
+
+// Determine Database Path
+let dbPath;
+if (app.isPackaged) {
+    // In production
+    if (process.env.PORTABLE_EXECUTABLE_DIR) {
+        // Portable Mode (e.g. USB): Use the directory of the executable
+        dbPath = path.join(process.env.PORTABLE_EXECUTABLE_DIR, 'schedule.db');
+    } else {
+        // Installed Mode: Use AppData (Standard)
+        dbPath = path.join(app.getPath('userData'), 'schedule.db');
+    }
+} else {
+    // Development Mode
+    dbPath = path.join(__dirname, 'schedule.db');
+}
+
+// Set environment variable for db.js to use
+process.env.DB_PATH = dbPath;
+console.log(`Database Location: ${dbPath}`);
+
 const expressApp = require('./src/app');
 
 let server;

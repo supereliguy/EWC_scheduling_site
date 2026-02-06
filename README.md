@@ -12,7 +12,7 @@ A local, offline desktop application for managing work schedules. Built with Ele
 *   **Manual Control:** Spreadsheet-style editor to pre-assign or fix shifts.
 *   **Recovery:** Snapshot system to save/restore database states.
 
-## Installation & Running
+## Installation & Running (Source Code)
 
 1.  Install [Node.js](https://nodejs.org/).
 2.  Install dependencies:
@@ -24,6 +24,20 @@ A local, offline desktop application for managing work schedules. Built with Ele
     npm start
     ```
     Or run `start.bat` on Windows.
+
+## Building for Windows (Creating .exe)
+
+To create a standalone installer or portable USB version:
+
+1.  Run the build command:
+    ```bash
+    npm run dist
+    ```
+2.  Find the generated `.exe` files in the `dist/` folder.
+    *   `UltimateScheduler_Portable.exe`: Runs without installation (great for USBs).
+    *   `Ultimate Scheduler Setup...exe`: Standard installer.
+
+See `BUILD_INSTRUCTIONS.md` for more details.
 
 ## Development
 
