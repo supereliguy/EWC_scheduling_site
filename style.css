@@ -2,24 +2,56 @@ body {
     background-color: #f8f9fa;
     margin: 0;
     padding: 0;
+    font-size: 16px; /* Increased base font size */
+}
+
+/* Global improvements */
+h1, h2, h3, h4, h5, h6 {
+    margin-bottom: 1.2rem;
+    font-weight: 600;
+}
+
+.btn {
+    padding: 0.5rem 1rem;
+    font-size: 1rem;
+    margin-right: 5px; /* Spacing between buttons */
+    margin-bottom: 5px;
+}
+
+.form-control, .form-select {
+    padding: 0.6rem 0.8rem;
+    font-size: 1rem;
+    margin-bottom: 10px; /* Spacing for inputs */
+}
+
+.table {
+    font-size: 1.05rem;
+    margin-top: 15px;
+}
+
+.table th {
+    background-color: #f1f3f5;
+    font-weight: 600;
 }
 
 /* Calendar Styles */
 .calendar-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: 1px; /* Tighter gap */
-    background: #ccc; /* Border color for grid */
-    border: 1px solid #ccc;
+    gap: 2px; /* Slightly larger gap */
+    background: #e0e0e0;
+    border: 1px solid #e0e0e0;
+    margin-top: 20px;
 }
 
 .calendar-day {
     background: #fff;
-    min-height: 100px;
-    padding: 5px;
+    min-height: 120px; /* Taller days */
+    padding: 10px;
     position: relative;
     cursor: pointer;
     user-select: none;
+    transition: background-color 0.2s;
 }
 
 .calendar-day.work {
@@ -31,25 +63,40 @@ body {
 }
 
 .calendar-day:hover {
-    background-color: #f5f5f5;
+    background-color: #f8f9fa;
+    z-index: 1; /* Bring to front on hover */
+    box-shadow: 0 0 5px rgba(0,0,0,0.1);
 }
 
 /* Assigned shift indicator */
 .shift-badge {
     display: block;
-    font-size: 0.8em;
-    padding: 2px 4px;
-    margin-top: 4px;
+    font-size: 0.9em;
+    padding: 4px 6px;
+    margin-top: 6px;
     border-radius: 4px;
     background-color: #bbdefb;
     color: #0d47a1;
+    font-weight: 500;
 }
 
 /* Overrides */
 .section-content {
     background: #fff;
-    padding: 20px;
-    border-radius: 5px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    margin-bottom: 20px;
+    padding: 30px; /* More padding */
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    margin-bottom: 30px;
+}
+
+/* Schedule Table Overrides */
+#schedule-display table th, #schedule-display table td {
+    padding: 10px; /* More cell padding */
+    min-width: 60px;
+}
+
+#schedule-display select {
+    padding: 5px;
+    border-radius: 4px;
+    border: 1px solid #ced4da;
 }

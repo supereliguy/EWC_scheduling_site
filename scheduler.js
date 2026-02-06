@@ -59,6 +59,20 @@ window.generateSchedule = async ({ siteId, startDate, days }) => {
 
     // Fetch settings
     const settingsRows = db.prepare('SELECT * FROM user_settings').all();
+
+    // Fetch Global Settings
+    const globalRows = db.prepare('SELECT * FROM global_settings').all();
+    const globalSettings = {};
+    globalRows.forEach(r => globalSettings[r.key] = r.value);
+    const g = {
+        max_consecutive: parseInt(globalSettings.max_consecutive_shifts) || 5,
+        min_days_off: parseInt(globalSettings.min_days_off) || 2,
+        night_pref: parseFloat(globalSettings.night_preference) || 1.0,
+        target_shifts: parseInt(globalSettings.target_shifts) || 20,
+        target_variance: parseInt(globalSettings.target_shifts_variance) || 2,
+        preferred_block_size: parseInt(globalSettings.preferred_block_size) || 3
+    };
+
     const userSettings = {};
     users.forEach(u => {
         const s = settingsRows.find(r => r.user_id === u.id) || {};
@@ -66,12 +80,12 @@ window.generateSchedule = async ({ siteId, startDate, days }) => {
         try { shiftRanking = JSON.parse(s.shift_ranking || '[]'); } catch(e) {}
 
         userSettings[u.id] = {
-            max_consecutive: s.max_consecutive_shifts || 5,
-            min_days_off: s.min_days_off || 2,
-            night_pref: s.night_preference !== undefined ? s.night_preference : 1.0,
-            target_shifts: s.target_shifts || 20,
-            target_variance: s.target_shifts_variance || 2,
-            preferred_block_size: s.preferred_block_size || 3,
+            max_consecutive: s.max_consecutive_shifts !== undefined ? s.max_consecutive_shifts : g.max_consecutive,
+            min_days_off: s.min_days_off !== undefined ? s.min_days_off : g.min_days_off,
+            night_pref: s.night_preference !== undefined ? s.night_preference : g.night_pref,
+            target_shifts: s.target_shifts !== undefined ? s.target_shifts : g.target_shifts,
+            target_variance: s.target_shifts_variance !== undefined ? s.target_shifts_variance : g.target_variance,
+            preferred_block_size: s.preferred_block_size !== undefined ? s.preferred_block_size : g.preferred_block_size,
             shift_ranking: shiftRanking
         };
     });

@@ -92,6 +92,10 @@ class DBWrapper {
                 FOREIGN KEY(site_id) REFERENCES sites(id) ON DELETE CASCADE,
                 FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
             );
+            CREATE TABLE IF NOT EXISTS global_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            );
             CREATE TABLE IF NOT EXISTS snapshots (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -99,6 +103,18 @@ class DBWrapper {
                 data BLOB
             );
         `);
+
+        // Seed Global Settings
+        const globalCount = this.db.exec("SELECT COUNT(*) FROM global_settings")[0].values[0][0];
+        if (globalCount === 0) {
+            const stmt = this.db.prepare("INSERT INTO global_settings (key, value) VALUES (?, ?)");
+            stmt.run('max_consecutive_shifts', '5');
+            stmt.run('min_days_off', '2');
+            stmt.run('night_preference', '1.0');
+            stmt.run('target_shifts', '20');
+            stmt.run('target_shifts_variance', '2');
+            stmt.run('preferred_block_size', '3');
+        }
 
         // Default Admin
         // Check if admin exists

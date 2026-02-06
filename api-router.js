@@ -126,6 +126,25 @@ api.put('/api/users/:id/settings', (req, res) => {
     res.json({ message: 'Settings saved' });
 });
 
+// Global Settings
+api.get('/api/settings/global', (req, res) => {
+    const rows = db.prepare('SELECT * FROM global_settings').all();
+    const settings = {};
+    rows.forEach(r => settings[r.key] = r.value);
+    res.json({ settings });
+});
+
+api.put('/api/settings/global', (req, res) => {
+    const s = req.body;
+    db.transaction(() => {
+        const stmt = db.prepare('INSERT OR REPLACE INTO global_settings (key, value) VALUES (?, ?)');
+        for(const k in s) {
+            stmt.run(k, String(s[k]));
+        }
+    })();
+    res.json({ message: 'Global settings saved' });
+});
+
 // Sites
 api.get('/api/sites', (req, res) => {
     const sites = db.prepare('SELECT * FROM sites').all();

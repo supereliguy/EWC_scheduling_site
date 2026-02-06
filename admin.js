@@ -93,6 +93,40 @@ window.saveSettings = async () => {
     } catch(e) { alert(e.message); }
 };
 
+// Global Settings
+window.openGlobalSettings = async () => {
+    const data = await apiClient.get('/api/settings/global');
+    if(data.settings) {
+        const s = data.settings;
+        document.getElementById('gs-max-consecutive').value = s.max_consecutive_shifts;
+        document.getElementById('gs-min-days-off').value = s.min_days_off;
+        document.getElementById('gs-target-shifts').value = s.target_shifts;
+        document.getElementById('gs-variance').value = s.target_shifts_variance;
+        document.getElementById('gs-block-size').value = s.preferred_block_size;
+
+        const modal = new bootstrap.Modal(document.getElementById('globalSettingsModal'));
+        modal.show();
+    }
+};
+
+window.saveGlobalSettings = async () => {
+    const body = {
+        max_consecutive_shifts: document.getElementById('gs-max-consecutive').value,
+        min_days_off: document.getElementById('gs-min-days-off').value,
+        target_shifts: document.getElementById('gs-target-shifts').value,
+        target_shifts_variance: document.getElementById('gs-variance').value,
+        preferred_block_size: document.getElementById('gs-block-size').value,
+        night_preference: 1.0
+    };
+
+    try {
+        const res = await apiClient.put('/api/settings/global', body);
+        alert(res.message);
+        const modal = bootstrap.Modal.getInstance(document.getElementById('globalSettingsModal'));
+        modal.hide();
+    } catch(e) { alert(e.message); }
+};
+
 // --- User Requests Calendar Logic ---
 let reqCalendarWidget = null;
 let currentReqUserId = null;

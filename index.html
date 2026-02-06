@@ -44,24 +44,24 @@
         <h4 class="mt-3">Loading Database...</h4>
     </div>
 
-    <div class="container-fluid mt-4">
-        <div class="d-flex justify-content-between align-items-center mb-4 px-3">
-            <h1>Ultimate Scheduler <small class="text-muted fs-5">Admin Console</small></h1>
-            <div>
-                <button class="btn btn-secondary btn-sm" onclick="exportDB()">Export Backup</button>
+    <div class="container-fluid py-4">
+        <div class="d-flex justify-content-between align-items-center mb-5 px-4 bg-white py-3 rounded shadow-sm">
+            <h1 class="mb-0 text-primary fw-bold">Ultimate Scheduler <span class="text-secondary fs-4 fw-light">| Admin Console</span></h1>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-secondary" onclick="exportDB()">Export Backup</button>
                 <input type="file" id="import-db-input" style="display:none" onchange="importDB(this)">
-                <button class="btn btn-secondary btn-sm" onclick="document.getElementById('import-db-input').click()">Import Backup</button>
-                <button class="btn btn-danger btn-sm" onclick="resetDB()">Reset All</button>
+                <button class="btn btn-outline-secondary" onclick="document.getElementById('import-db-input').click()">Import Backup</button>
+                <button class="btn btn-outline-danger" onclick="resetDB()">Reset All</button>
             </div>
         </div>
 
-        <div class="row px-3">
+        <div class="row px-4">
             <!-- Sidebar -->
-            <div class="col-md-2">
-                <div class="list-group">
-                    <button class="list-group-item list-group-item-action active" onclick="showSection('users-section', this)">Users</button>
-                    <button class="list-group-item list-group-item-action" onclick="showSection('sites-section', this)">Sites & Shifts</button>
-                    <!-- Site Dashboard will be dynamic/hidden initially or part of Sites -->
+            <div class="col-md-2 mb-4">
+                <div class="list-group shadow-sm">
+                    <button class="list-group-item list-group-item-action py-3 fw-bold active" onclick="showSection('users-section', this)">Users</button>
+                    <button class="list-group-item list-group-item-action py-3 fw-bold" onclick="showSection('sites-section', this)">Sites & Shifts</button>
+                    <button class="list-group-item list-group-item-action py-3 fw-bold" onclick="openGlobalSettings()">Global Settings</button>
                 </div>
             </div>
 
@@ -168,6 +168,26 @@
                     </div>
                 </div>
 
+            </div>
+        </div>
+    </div>
+
+    <!-- Global Settings Modal -->
+    <div class="modal fade" id="globalSettingsModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header"><h5 class="modal-title">Global Scheduling Defaults</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <p class="text-muted small">These settings apply to users who have not set specific preferences.</p>
+                    <div class="mb-2"><label>Max Consecutive Shifts</label><input type="number" class="form-control" id="gs-max-consecutive"></div>
+                    <div class="mb-2"><label>Min Days Off</label><input type="number" class="form-control" id="gs-min-days-off"></div>
+                    <div class="mb-2"><label>Target Shifts</label><input type="number" class="form-control" id="gs-target-shifts"></div>
+                    <div class="mb-2"><label>Target Variance</label><input type="number" class="form-control" id="gs-variance"></div>
+                    <div class="mb-2"><label>Preferred Block Size</label><input type="number" class="form-control" id="gs-block-size"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" onclick="saveGlobalSettings()">Save Defaults</button>
+                </div>
             </div>
         </div>
     </div>
