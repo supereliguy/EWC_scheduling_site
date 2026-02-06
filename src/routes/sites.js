@@ -48,6 +48,22 @@ router.delete('/sites/:id', requireAdmin, (req, res) => {
     }
 });
 
+// List Users for a Site
+router.get('/sites/:siteId/users', requireAuth, (req, res) => {
+    const { siteId } = req.params;
+    try {
+        const users = db.prepare(`
+            SELECT u.id, u.username, u.role
+            FROM users u
+            JOIN site_users su ON u.id = su.user_id
+            WHERE su.site_id = ?
+        `).all(siteId);
+        res.json({ users });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // List Shifts for a Site
 router.get('/sites/:siteId/shifts', requireAuth, (req, res) => {
     const { siteId } = req.params;

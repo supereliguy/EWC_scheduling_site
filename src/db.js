@@ -1,5 +1,4 @@
 const Database = require('better-sqlite3');
-const bcrypt = require('bcrypt');
 
 const db = new Database('schedule.db', { verbose: console.log });
 
@@ -10,10 +9,11 @@ const initDb = () => {
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
             role TEXT DEFAULT 'user', -- 'admin' or 'user'
             token TEXT UNIQUE, -- Secure token for public feeds
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            default_site_id INTEGER,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(default_site_id) REFERENCES sites(id) ON DELETE SET NULL
         )
     `);
 
@@ -23,6 +23,17 @@ const initDb = () => {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             description TEXT
+        )
+    `);
+
+    // Site Users (Many-to-Many)
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS site_users (
+            site_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            PRIMARY KEY(site_id, user_id),
+            FOREIGN KEY(site_id) REFERENCES sites(id) ON DELETE CASCADE,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
         )
     `);
 
@@ -62,6 +73,7 @@ const initDb = () => {
             date TEXT NOT NULL, -- "YYYY-MM-DD"
             shift_id INTEGER NOT NULL,
             user_id INTEGER NOT NULL,
+            is_locked BOOLEAN DEFAULT 0, -- 1 if manually locked/pre-assigned
             status TEXT DEFAULT 'draft', -- 'draft', 'published'
             FOREIGN KEY(site_id) REFERENCES sites(id) ON DELETE CASCADE,
             FOREIGN KEY(shift_id) REFERENCES shifts(id) ON DELETE CASCADE,
@@ -76,8 +88,22 @@ const initDb = () => {
             user_id INTEGER PRIMARY KEY,
             max_consecutive_shifts INTEGER DEFAULT 5,
             min_days_off INTEGER DEFAULT 2,
-            night_preference REAL DEFAULT 1.0, -- 1.0 = neutral, >1.0 = prefers night, <1.0 = dislikes night
+            night_preference REAL DEFAULT 1.0,
+            target_shifts INTEGER DEFAULT 20,
+            target_shifts_variance INTEGER DEFAULT 2,
+            preferred_block_size INTEGER DEFAULT 3,
+            shift_ranking TEXT DEFAULT '[]', -- JSON string array of shift names
             FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    `);
+
+    // Snapshots table
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            description TEXT,
+            data_blob TEXT NOT NULL -- JSON dump of the DB state
         )
     `);
 
