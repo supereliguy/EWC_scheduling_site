@@ -23,8 +23,10 @@ class DBWrapper {
             this.db = new SQL.Database(new Uint8Array(savedData));
         } else {
             this.db = new SQL.Database();
-            this.seed();
         }
+
+        // Always run seed to ensure schema is up to date (migrations)
+        this.seed();
 
         // Auto-save on modification could be tricky with sql.js since it's in-memory.
         // We will implement an explicit save function that we call after write ops.
