@@ -1,73 +1,55 @@
 body {
-    font-family: sans-serif;
-    display: flex;
-    justify-content: center;
-    align-items: flex-start; /* Align to the top */
-    height: 100vh;
+    background-color: #f8f9fa;
     margin: 0;
-    background-color: #f4f4f4;
+    padding: 0;
 }
 
-.container {
-    text-align: center;
-    background: white;
-    padding: 2em;
-    border-radius: 8px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-    margin-top: 5vh; /* Add margin to the top */
-}
-
-.user-selection, .calendar-controls {
-    margin-bottom: 1em;
-}
-
-.calendar-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1em;
-}
-
-#month-year-display {
-    margin: 0;
-    min-width: 150px; /* Adjust as needed */
-    text-align: center;
-}
-
+/* Calendar Styles */
 .calendar-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: 5px;
-    margin-bottom: 1em;
+    gap: 1px; /* Tighter gap */
+    background: #ccc; /* Border color for grid */
+    border: 1px solid #ccc;
 }
 
 .calendar-day {
-    padding: 1em;
-    border: 1px solid #ccc;
-    text-align: center;
+    background: #fff;
+    min-height: 100px;
+    padding: 5px;
+    position: relative;
     cursor: pointer;
-    user-select: none; /* Prevent text selection */
+    user-select: none;
 }
 
 .calendar-day.work {
-    background-color: #a2d2ff;
+    background-color: #e3f2fd; /* Light Blue */
 }
 
 .calendar-day.off {
-    background-color: #ffafcc;
+    background-color: #ffebee; /* Light Red */
 }
 
-button {
-    padding: 0.5em 1em;
-    border: none;
-    background-color: #007bff;
-    color: white;
+.calendar-day:hover {
+    background-color: #f5f5f5;
+}
+
+/* Assigned shift indicator */
+.shift-badge {
+    display: block;
+    font-size: 0.8em;
+    padding: 2px 4px;
+    margin-top: 4px;
     border-radius: 4px;
-    cursor: pointer;
+    background-color: #bbdefb;
+    color: #0d47a1;
 }
 
-button:hover {
-    background-color: #0056b3;
+/* Overrides */
+.section-content {
+    background: #fff;
+    padding: 20px;
+    border-radius: 5px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
 }
-
-/* Modal Styles removed in favor of Bootstrap */

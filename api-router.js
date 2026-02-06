@@ -161,9 +161,24 @@ api.delete('/api/shifts/:id', (req, res) => {
 
 // Schedule
 api.get('/api/schedule', (req, res) => {
-    const { siteId, month, year } = req.query;
-    const startStr = `${year}-${month.toString().padStart(2, '0')}-01`;
-    const endStr = `${year}-${month.toString().padStart(2, '0')}-31`;
+    const { siteId, startDate, days, month, year } = req.query;
+
+    let startStr, endStr;
+
+    if (startDate && days) {
+        startStr = startDate;
+        const start = new Date(startDate);
+        const end = new Date(start);
+        end.setDate(start.getDate() + parseInt(days) - 1);
+        // Helper to format YYYY-MM-DD
+        const toDateStr = (d) => `${d.getFullYear()}-${(d.getMonth()+1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
+        endStr = toDateStr(end);
+    } else if (month && year) {
+        startStr = `${year}-${month.toString().padStart(2, '0')}-01`;
+        endStr = `${year}-${month.toString().padStart(2, '0')}-31`;
+    } else {
+        return res.status(400).json({ error: 'Missing date parameters' });
+    }
 
     const assignments = db.prepare(`
         SELECT a.date, a.status, a.is_locked, a.shift_id, s.name as shift_name, u.username, u.id as user_id
@@ -204,9 +219,9 @@ api.put('/api/schedule/assignment', (req, res) => {
 
 api.post('/api/schedule/generate', async (req, res) => {
     try {
-        const { siteId, month, year } = req.body;
+        const { siteId, startDate, days } = req.body;
         // Call the global function exposed by scheduler.js
-        const result = await window.generateSchedule({ siteId, month, year });
+        const result = await window.generateSchedule({ siteId, startDate, days: parseInt(days) });
         res.json({ message: 'Generated', assignments: result.assignments });
     } catch(e) {
         res.status(500).json({ error: e.message });
@@ -221,6 +236,22 @@ api.get('/api/sites/:siteId/users', (req, res) => {
         WHERE su.site_id = ?
     `).all(req.params.siteId);
     res.json({ users });
+});
+
+api.put('/api/sites/:siteId/users', (req, res) => {
+    const { userIds } = req.body; // Array of user IDs
+    const siteId = req.params.siteId;
+
+    try {
+        db.transaction(() => {
+            db.prepare('DELETE FROM site_users WHERE site_id = ?').run(siteId);
+            const stmt = db.prepare('INSERT INTO site_users (site_id, user_id) VALUES (?, ?)');
+            userIds.forEach(uid => stmt.run(siteId, uid));
+        })();
+        res.json({ message: 'Site users updated' });
+    } catch(e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 // Requests

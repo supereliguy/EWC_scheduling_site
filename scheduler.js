@@ -13,35 +13,39 @@ const isNightShift = (shift) => {
 };
 
 // We attach to window so it can be called by api-router
-window.generateSchedule = async ({ siteId, month, year }) => {
+window.generateSchedule = async ({ siteId, startDate, days }) => {
     // Access global db wrapper
     const db = window.db;
 
-    const startDate = new Date(year, month - 1, 1);
-    const endDate = new Date(year, month, 0); // Last day of month
-    const daysInMonth = endDate.getDate();
+    // Parse start date from string YYYY-MM-DD to local Date
+    const [y, m, d] = startDate.split('-').map(Number);
+    const startObj = new Date(y, m - 1, d);
+
+    const endObj = new Date(startObj);
+    endObj.setDate(startObj.getDate() + days - 1);
 
     // 1. Fetch Data
 
-    // Previous Month (last 7 days) for continuity
-    const prevMonthEnd = new Date(year, month - 1, 0);
-    const prevMonthStart = new Date(prevMonthEnd);
-    prevMonthStart.setDate(prevMonthEnd.getDate() - 6);
+    // Previous Context (last 7 days before start)
+    const contextEnd = new Date(startObj);
+    contextEnd.setDate(contextEnd.getDate() - 1);
+    const contextStart = new Date(contextEnd);
+    contextStart.setDate(contextStart.getDate() - 6);
 
     const prevAssignments = db.prepare(`
         SELECT a.*, s.name as shift_name, s.start_time, s.end_time
         FROM assignments a
         JOIN shifts s ON a.shift_id = s.id
         WHERE a.site_id = ? AND a.date BETWEEN ? AND ?
-    `).all(siteId, toDateStr(prevMonthStart), toDateStr(prevMonthEnd));
+    `).all(siteId, toDateStr(contextStart), toDateStr(contextEnd));
 
-    // Locked Assignments for Current Month
+    // Locked Assignments for Target Period
     const lockedAssignments = db.prepare(`
         SELECT a.*, s.name as shift_name, s.start_time, s.end_time
         FROM assignments a
         JOIN shifts s ON a.shift_id = s.id
         WHERE a.site_id = ? AND a.date BETWEEN ? AND ? AND a.is_locked = 1
-    `).all(siteId, toDateStr(startDate), toDateStr(endDate));
+    `).all(siteId, toDateStr(startObj), toDateStr(endObj));
 
     const shifts = db.prepare('SELECT * FROM shifts WHERE site_id = ?').all(siteId);
 
@@ -75,7 +79,7 @@ window.generateSchedule = async ({ siteId, month, year }) => {
     const requests = db.prepare(`
         SELECT user_id, date, type FROM requests
         WHERE site_id = ? AND date BETWEEN ? AND ?
-    `).all(siteId, toDateStr(startDate), toDateStr(endDate));
+    `).all(siteId, toDateStr(startObj), toDateStr(endObj));
 
     // 2. Algorithm: Randomized Greedy with Restarts
     const ITERATIONS = 100;
@@ -84,7 +88,7 @@ window.generateSchedule = async ({ siteId, month, year }) => {
 
     for (let i = 0; i < ITERATIONS; i++) {
         const result = runGreedy({
-            siteId, month, year, daysInMonth,
+            siteId, startObj, days,
             shifts, users, userSettings, requests,
             prevAssignments, lockedAssignments
         });
@@ -101,9 +105,9 @@ window.generateSchedule = async ({ siteId, month, year }) => {
 
     // 3. Save
     const transaction = db.transaction(() => {
-        // Delete NON-LOCKED assignments for this month
-        const startStr = toDateStr(startDate);
-        const endStr = toDateStr(endDate);
+        // Delete NON-LOCKED assignments for this period
+        const startStr = toDateStr(startObj);
+        const endStr = toDateStr(endObj);
         db.prepare('DELETE FROM assignments WHERE site_id = ? AND date BETWEEN ? AND ? AND is_locked = 0')
           .run(siteId, startStr, endStr);
 
@@ -121,7 +125,7 @@ window.generateSchedule = async ({ siteId, month, year }) => {
     return { assignments: bestSchedule };
 };
 
-const runGreedy = ({ siteId, month, year, daysInMonth, shifts, users, userSettings, requests, prevAssignments, lockedAssignments }) => {
+const runGreedy = ({ siteId, startObj, days, shifts, users, userSettings, requests, prevAssignments, lockedAssignments }) => {
     let assignments = [...lockedAssignments.map(a => ({
         date: a.date,
         shiftId: a.shift_id,
@@ -149,9 +153,9 @@ const runGreedy = ({ siteId, month, year, daysInMonth, shifts, users, userSettin
             lastShift = last;
             lastDate = new Date(last.date);
 
-            // Calculate gap to Month Start (Day 1)
-            const monthStart = new Date(year, month - 1, 1);
-            const gap = (monthStart - lastDate) / (1000 * 60 * 60 * 24);
+            // Calculate gap to Start Date
+            // Note: startObj is local midnight. lastDate is also local midnight (from toDateStr)
+            const gap = (startObj - lastDate) / (1000 * 60 * 60 * 24);
 
             if (gap <= 1) {
                 daysOff = 0;
@@ -186,9 +190,8 @@ const runGreedy = ({ siteId, month, year, daysInMonth, shifts, users, userSettin
     });
 
     // Helper to update state
-    const updateState = (uId, dateStr, shift, isWorked) => {
+    const updateState = (uId, dateObj, shift, isWorked) => {
         const s = userState[uId];
-        const date = new Date(dateStr);
 
         if (isWorked) {
             s.totalAssigned++;
@@ -207,7 +210,7 @@ const runGreedy = ({ siteId, month, year, daysInMonth, shifts, users, userSettin
             }
 
             s.lastShift = shift;
-            s.lastDate = date;
+            s.lastDate = dateObj;
         } else {
             s.consecutive = 0;
             s.daysOff++;
@@ -217,9 +220,10 @@ const runGreedy = ({ siteId, month, year, daysInMonth, shifts, users, userSettin
     };
 
     // Iterate Days
-    for (let day = 1; day <= daysInMonth; day++) {
-        const dateStr = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-        const dateObj = new Date(dateStr);
+    for (let i = 0; i < days; i++) {
+        const dateObj = new Date(startObj);
+        dateObj.setDate(startObj.getDate() + i);
+        const dateStr = toDateStr(dateObj);
 
         const lockedToday = assignments.filter(a => a.date === dateStr);
         const lockedUserIds = new Set(lockedToday.map(a => a.userId));
@@ -234,7 +238,7 @@ const runGreedy = ({ siteId, month, year, daysInMonth, shifts, users, userSettin
         // Process Locked Users State Update
         lockedToday.forEach(a => {
             const sObj = shifts.find(s => s.id === a.shiftId) || a.shiftObj;
-            updateState(a.userId, dateStr, sObj, true);
+            updateState(a.userId, dateObj, sObj, true);
         });
 
         // Fill remaining slots
@@ -274,6 +278,9 @@ const runGreedy = ({ siteId, month, year, daysInMonth, shifts, users, userSettin
                     }
 
                     // 4. Targets
+                    // Note: Target is usually monthly. If 'days' < 30, we should scale the target?
+                    // Or user sets "Target Shifts per Period".
+                    // For now, assuming target is for the period or month.
                     const needed = settings.target_shifts - state.totalAssigned;
                     score += needed * 10;
 
@@ -315,7 +322,7 @@ const runGreedy = ({ siteId, month, year, daysInMonth, shifts, users, userSettin
                 });
                 assignedToday.add(selected.user.id);
                 totalScore += selected.score;
-                updateState(selected.user.id, dateStr, shift, true);
+                updateState(selected.user.id, dateObj, shift, true);
             } else {
                 totalScore -= 10000;
             }
@@ -323,7 +330,7 @@ const runGreedy = ({ siteId, month, year, daysInMonth, shifts, users, userSettin
 
         users.forEach(u => {
             if (!assignedToday.has(u.id)) {
-                updateState(u.id, dateStr, null, false);
+                updateState(u.id, dateObj, null, false);
             }
         });
     }

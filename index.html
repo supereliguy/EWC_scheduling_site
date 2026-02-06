@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ultimate Scheduler (Web)</title>
+    <title>Ultimate Scheduler (Admin)</title>
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
@@ -13,26 +13,27 @@
             background: white; z-index: 9999; display: flex; justify-content: center; align-items: center;
             flex-direction: column;
         }
-        .nav-tabs .nav-link { cursor: pointer; }
-        .tab-pane { padding: 20px 0; }
+        /* Admin layout overrides */
+        .section-content { display: none; }
 
-        /* Dashboard specific overrides */
         .calendar-grid {
             display: grid;
             grid-template-columns: repeat(7, 1fr);
             gap: 5px;
             margin-top: 20px;
+            user-select: none; /* Prevent text selection while painting */
         }
         .calendar-day {
             border: 1px solid #ddd;
-            min-height: 100px;
+            min-height: 80px;
             padding: 5px;
             background: #fff;
             position: relative;
+            cursor: pointer;
         }
-        .calendar-day.work { background-color: #e3f2fd; }
-        .calendar-day.off { background-color: #ffebee; }
-        .calendar-day:hover { border-color: #aaa; }
+        .calendar-day.work { background-color: #c8e6c9; }
+        .calendar-day.off { background-color: #ffcdd2; }
+        .calendar-day:hover { border-color: #666; }
     </style>
 </head>
 <body>
@@ -43,9 +44,9 @@
         <h4 class="mt-3">Loading Database...</h4>
     </div>
 
-    <div class="container mt-4">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h1>Ultimate Scheduler</h1>
+    <div class="container-fluid mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-4 px-3">
+            <h1>Ultimate Scheduler <small class="text-muted fs-5">Admin Console</small></h1>
             <div>
                 <button class="btn btn-secondary btn-sm" onclick="exportDB()">Export Backup</button>
                 <input type="file" id="import-db-input" style="display:none" onchange="importDB(this)">
@@ -54,163 +55,197 @@
             </div>
         </div>
 
-        <!-- Navigation -->
-        <ul class="nav nav-tabs" id="myTab" role="tablist">
-            <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="dashboard-tab" data-bs-toggle="tab" data-bs-target="#dashboard-pane" type="button">Dashboard (My Requests)</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="admin-tab" data-bs-toggle="tab" data-bs-target="#admin-pane" type="button">Admin & Settings</button>
-            </li>
-        </ul>
-
-        <div class="tab-content" id="myTabContent">
-
-            <!-- DASHBOARD TAB -->
-            <div class="tab-pane fade show active" id="dashboard-pane" role="tabpanel">
-                <div id="dashboard-container">
-                    <!-- Dashboard.js content will be injected here or managed here -->
-                    <div class="row mb-3">
-                        <div class="col-md-4">
-                            <select id="site-select" class="form-select"></select>
-                        </div>
-                        <div class="col-md-8 text-end">
-                            <div class="btn-group" role="group">
-                                <input type="radio" class="btn-check" name="mode" id="mode-request" value="request" checked>
-                                <label class="btn btn-outline-primary" for="mode-request">Request Mode</label>
-
-                                <input type="radio" class="btn-check" name="mode" id="mode-view" value="view">
-                                <label class="btn btn-outline-primary" for="mode-view">View My Schedule</label>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="d-flex justify-content-between align-items-center">
-                        <button id="prev-month-btn" class="btn btn-outline-secondary">&lt;</button>
-                        <h3 id="month-year-display" class="m-0"></h3>
-                        <button id="next-month-btn" class="btn btn-outline-secondary">&gt;</button>
-                    </div>
-
-                    <div id="request-controls" class="card p-2 mt-3 mb-3 bg-light" style="display:flex; flex-direction:row; gap:10px; align-items:center;">
-                        <strong>Tools:</strong>
-                        <button id="work-btn" class="btn btn-sm btn-outline-success">Prefer Work</button>
-                        <button id="off-btn" class="btn btn-sm btn-outline-danger">Request Off</button>
-                        <button id="clear-btn" class="btn btn-sm btn-outline-secondary">Clear</button>
-                        <div class="ms-auto">
-                            <button id="submit-btn" class="btn btn-success">Save Requests</button>
-                        </div>
-                    </div>
-
-                    <div id="calendar" class="calendar-grid"></div>
+        <div class="row px-3">
+            <!-- Sidebar -->
+            <div class="col-md-2">
+                <div class="list-group">
+                    <button class="list-group-item list-group-item-action active" onclick="showSection('users-section', this)">Users</button>
+                    <button class="list-group-item list-group-item-action" onclick="showSection('sites-section', this)">Sites & Shifts</button>
+                    <!-- Site Dashboard will be dynamic/hidden initially or part of Sites -->
                 </div>
             </div>
 
-            <!-- ADMIN TAB -->
-            <div class="tab-pane fade" id="admin-pane" role="tabpanel">
-                <div class="row">
-                    <div class="col-md-3">
-                        <div class="list-group">
-                            <button class="list-group-item list-group-item-action active" onclick="showSection('users-section', this)">Users</button>
-                            <button class="list-group-item list-group-item-action" onclick="showSection('sites-section', this)">Sites & Shifts</button>
-                            <button class="list-group-item list-group-item-action" onclick="showSection('schedule-section', this)">Schedule Editor</button>
-                        </div>
+            <!-- Main Content -->
+            <div class="col-md-10">
+
+                <!-- Users Section -->
+                <div id="users-section" class="section-content" style="display:block;">
+                    <h3>Manage Users</h3>
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" id="new-username" placeholder="Username">
+                        <select class="form-select" id="new-role" style="max-width: 120px;">
+                            <option value="user">User</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                        <button class="btn btn-primary" id="create-user-btn">Create</button>
                     </div>
-                    <div class="col-md-9">
+                    <table class="table table-bordered" id="users-table">
+                        <thead><tr><th>ID</th><th>Username</th><th>Role</th><th>Actions</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
 
-                        <!-- Users Section -->
-                        <div id="users-section" class="section-content">
-                            <h3>Manage Users</h3>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" id="new-username" placeholder="Username">
-                                <select class="form-select" id="new-role" style="max-width: 120px;">
-                                    <option value="user">User</option>
-                                    <option value="admin">Admin</option>
-                                </select>
-                                <button class="btn btn-primary" id="create-user-btn">Create</button>
+                <!-- Sites Section -->
+                <div id="sites-section" class="section-content">
+                    <h3>Sites</h3>
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" id="new-site-name" placeholder="Site Name">
+                        <button class="btn btn-primary" id="create-site-btn">Create Site</button>
+                    </div>
+                    <table class="table table-bordered" id="sites-table">
+                        <thead><tr><th>ID</th><th>Name</th><th>Actions</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+
+                    <div id="shifts-container" style="display:none; margin-top: 30px; border-top: 1px solid #ccc; padding-top: 20px;">
+                        <h4>Shifts for <span id="current-shift-site-name"></span></h4>
+                        <button class="btn btn-sm btn-secondary mb-3" onclick="closeShiftsEditor()">Close Shift Editor</button>
+
+                        <div class="card p-3 mb-3 bg-light">
+                            <h5>Add Shift</h5>
+                            <div class="row g-2">
+                                <div class="col-md-4"><input type="text" class="form-control" id="new-shift-name" placeholder="Shift Name (e.g. Day)"></div>
+                                <div class="col-md-3"><input type="time" class="form-control" id="new-shift-start" value="08:00"></div>
+                                <div class="col-md-3"><input type="time" class="form-control" id="new-shift-end" value="16:00"></div>
+                                <div class="col-md-2"><input type="number" class="form-control" id="new-shift-staff" placeholder="Qty" value="1"></div>
                             </div>
-                            <table class="table table-bordered" id="users-table">
-                                <thead><tr><th>ID</th><th>Username</th><th>Role</th><th>Actions</th></tr></thead>
-                                <tbody></tbody>
-                            </table>
+                            <button class="btn btn-primary mt-2" id="create-shift-btn">Add Shift</button>
                         </div>
+                        <table class="table table-bordered" id="shifts-table">
+                            <thead><tr><th>Name</th><th>Times</th><th>Staff</th><th>Actions</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
 
-                        <!-- Sites Section -->
-                        <div id="sites-section" class="section-content" style="display:none;">
-                            <h3>Sites</h3>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" id="new-site-name" placeholder="Site Name">
-                                <button class="btn btn-primary" id="create-site-btn">Create Site</button>
-                            </div>
-                            <table class="table table-bordered" id="sites-table">
-                                <thead><tr><th>ID</th><th>Name</th><th>Actions</th></tr></thead>
-                                <tbody></tbody>
-                            </table>
+                <!-- Site Dashboard (New) -->
+                <div id="site-dashboard-section" class="section-content">
+                    <div class="d-flex justify-content-between">
+                        <h2 id="sd-site-name">Site Name</h2>
+                        <button class="btn btn-outline-secondary" onclick="showSection('sites-section')">Back to Sites</button>
+                    </div>
+                    <hr>
 
-                            <hr>
-                            <h3>Shifts</h3>
-                            <div class="mb-3">
-                                <label>Select Site to Edit Shifts:</label>
-                                <select id="shift-site-select" class="form-select w-auto d-inline-block"></select>
-                            </div>
-                            <div class="card p-3 mb-3 bg-light">
-                                <h5>Add Shift</h5>
-                                <div class="row g-2">
-                                    <div class="col-md-4"><input type="text" class="form-control" id="new-shift-name" placeholder="Shift Name (e.g. Day)"></div>
-                                    <div class="col-md-3"><input type="time" class="form-control" id="new-shift-start" value="08:00"></div>
-                                    <div class="col-md-3"><input type="time" class="form-control" id="new-shift-end" value="16:00"></div>
-                                    <div class="col-md-2"><input type="number" class="form-control" id="new-shift-staff" placeholder="Qty" value="1"></div>
-                                </div>
-                                <button class="btn btn-primary mt-2" id="create-shift-btn">Add Shift</button>
-                            </div>
-                            <table class="table table-bordered" id="shifts-table">
-                                <thead><tr><th>Name</th><th>Times</th><th>Staff</th><th>Actions</th></tr></thead>
-                                <tbody></tbody>
-                            </table>
-                        </div>
+                    <!-- Tabs for Site Dashboard -->
+                    <ul class="nav nav-tabs mb-3">
+                        <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#sd-schedule">Schedule</a></li>
+                        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#sd-users">Users</a></li>
+                        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#sd-stats">Stats</a></li>
+                    </ul>
 
-                        <!-- Schedule Section -->
-                        <div id="schedule-section" class="section-content" style="display:none;">
-                            <h3>Schedule Editor</h3>
-                            <div class="row mb-3 g-2">
+                    <div class="tab-content">
+                        <!-- Schedule Editor -->
+                        <div class="tab-pane fade show active" id="sd-schedule">
+                            <div class="row mb-3 g-2 align-items-end">
                                 <div class="col-md-3">
-                                    <select id="schedule-site-select" class="form-select"></select>
+                                    <label>Start Date</label>
+                                    <input type="date" id="schedule-start-date" class="form-control">
                                 </div>
                                 <div class="col-md-2">
-                                    <select id="schedule-year" class="form-select"></select>
+                                    <label>Days</label>
+                                    <input type="number" id="schedule-days" class="form-control" value="30">
                                 </div>
-                                <div class="col-md-2">
-                                    <select id="schedule-month" class="form-select"></select>
-                                </div>
-                                <div class="col-md-5">
+                                <div class="col-md-7">
                                     <button class="btn btn-info text-white" id="load-schedule-btn">Load</button>
                                     <button class="btn btn-warning text-dark" id="generate-schedule-btn">Auto-Schedule</button>
                                     <button class="btn btn-secondary" onclick="openSnapshotsModal()">Undo/History</button>
                                 </div>
                             </div>
-                            <div id="schedule-display" style="overflow-x: auto;"></div>
+                            <div id="schedule-display" style="overflow-x: auto; min-height: 400px; border: 1px solid #ddd;"></div>
                         </div>
 
+                        <!-- Site Users -->
+                        <div class="tab-pane fade" id="sd-users">
+                            <h4>Site Users</h4>
+                            <div id="site-users-list"></div>
+                        </div>
+
+                        <!-- Stats -->
+                        <div class="tab-pane fade" id="sd-stats">
+                            <h4>Fairness & Stats</h4>
+                            <div id="site-stats-display"></div>
+                        </div>
                     </div>
                 </div>
-            </div>
 
+            </div>
         </div>
     </div>
 
     <!-- Modals -->
+    <!-- Site Users Modal -->
+    <div class="modal fade" id="siteUsersModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header"><h5 class="modal-title">Manage Site Users</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <input type="hidden" id="site-users-site-id">
+                    <div id="site-users-checkbox-list" style="max-height: 400px; overflow-y: auto;">
+                        <!-- Checkboxes injected here -->
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" onclick="saveSiteUsers()">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Settings Modal -->
     <div class="modal fade" id="settingsModal" tabindex="-1">
-        <div class="modal-dialog">
+        <div class="modal-dialog modal-lg"> <!-- Larger modal -->
             <div class="modal-content">
                 <div class="modal-header"><h5 class="modal-title">User Preferences</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                 <div class="modal-body">
                     <input type="hidden" id="settings-user-id">
-                    <div class="mb-2"><label>Max Consecutive</label><input type="number" class="form-control" id="setting-max-consecutive"></div>
-                    <div class="mb-2"><label>Min Days Off</label><input type="number" class="form-control" id="setting-min-days-off"></div>
-                    <div class="mb-2"><label>Target Shifts</label><input type="number" class="form-control" id="setting-target-shifts"></div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>General</h6>
+                            <div class="mb-2"><label>Max Consecutive</label><input type="number" class="form-control" id="setting-max-consecutive"></div>
+                            <div class="mb-2"><label>Min Days Off</label><input type="number" class="form-control" id="setting-min-days-off"></div>
+                            <div class="mb-2"><label>Target Shifts</label><input type="number" class="form-control" id="setting-target-shifts"></div>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Shift Ranking (Drag to reorder - TBD)</h6>
+                            <textarea id="setting-shift-ranking" class="form-control" rows="5" placeholder="Enter shift names in order of preference, one per line"></textarea>
+                        </div>
+                    </div>
+                    <hr>
+                    <h6>Requests</h6>
+                    <button class="btn btn-outline-primary" onclick="openRequestsModal()">Open Requests Calendar</button>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-primary" onclick="saveSettings()">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Requests Calendar Modal -->
+    <div class="modal fade" id="requestsModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Manage Requests: <span id="req-modal-username"></span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row mb-3">
+                         <div class="col-md-4">
+                            <input type="month" id="req-calendar-month" class="form-control" onchange="updateReqCalendar()">
+                        </div>
+                        <div class="col-md-8 text-end">
+                            <div class="btn-group">
+                                <button id="req-work-btn" class="btn btn-outline-success">Prefer Work</button>
+                                <button id="req-off-btn" class="btn btn-outline-danger">Request Off</button>
+                                <button id="req-clear-btn" class="btn btn-outline-secondary">Clear</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="req-calendar-container"></div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-success" onclick="saveUserRequests()">Save Requests</button>
                 </div>
             </div>
         </div>
@@ -241,12 +276,13 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
     <!-- App Scripts -->
+    <script type="module" src="calendar-widget.js"></script>
     <script src="db-wrapper.js"></script>
     <script src="scheduler.js"></script>
     <script src="api-router.js"></script>
 
     <!-- UI Logic -->
-    <script src="dashboard.js"></script>
+    <!-- Removed dashboard.js -->
     <script src="admin.js"></script>
 
     <script>
@@ -254,17 +290,10 @@
         async function initApp() {
             try {
                 await window.db.init();
-                // We access the SQL class which was loaded by db.init internally,
-                // but db-wrapper handles the global window.initSqlJs call.
-
-                // Keep the 'admin' user logged in virtually for this local version
-                // The dashboard/admin scripts expect an API call to /api/me to verify auth
-
                 document.getElementById('loading').style.display = 'none';
 
-                // Trigger initial loads
-                if(window.loadData) window.loadData(); // Dashboard
-                if(window.loadSites) window.loadSites(); // Admin
+                if(window.loadUsers) window.loadUsers();
+                if(window.loadSites) window.loadSites();
 
             } catch (e) {
                 document.getElementById('loading').innerHTML = `<h4 class="text-danger">Error: ${e.message}</h4>`;
@@ -312,6 +341,10 @@
                 document.querySelectorAll('.list-group-item').forEach(el => el.classList.remove('active'));
                 btn.classList.add('active');
             }
+        };
+
+        window.closeShiftsEditor = () => {
+            document.getElementById('shifts-container').style.display = 'none';
         };
 
         // Expose SQL Class for restore logic if needed
