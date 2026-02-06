@@ -369,6 +369,7 @@ window.enterSite = (siteId) => {
     onMonthPickerChange();
 
     showSection('site-dashboard-section');
+    await loadCategories(siteId); // Load categories first to populate dropdowns
     loadSchedule();
 };
 
@@ -493,40 +494,90 @@ const getScheduleParams = () => ({
     days: document.getElementById('schedule-days').value
 });
 
-document.getElementById('generate-schedule-btn').addEventListener('click', async () => {
+document.getElementById('generate-schedule-btn').addEventListener('click', () => runScheduleGeneration(false));
+
+window.forceGenerateSchedule = () => {
+    // Hide modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('conflictModal'));
+    modal.hide();
+    runScheduleGeneration(true);
+};
+
+async function runScheduleGeneration(force) {
     const params = getScheduleParams();
     if(!params.siteId) return alert('Select site');
     if(!params.startDate) return alert('Select start date');
 
+    // Add force param
+    params.force = force;
+
     const statusEl = document.getElementById('generation-status');
     const btn = document.getElementById('generate-schedule-btn');
 
-    // UI Feedback
     statusEl.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Generating...';
     statusEl.classList.remove('d-none');
     btn.disabled = true;
 
-    // Allow UI to render before blocking
     await new Promise(r => setTimeout(r, 100));
 
     try {
-        await apiClient.post('/api/schedule/generate', params);
+        const res = await apiClient.post('/api/schedule/generate', params);
 
-        // Success Feedback
-        statusEl.innerHTML = '<span class="text-success fw-bold">Done!</span>';
-        setTimeout(() => {
-             statusEl.classList.add('d-none');
-             statusEl.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Generating...';
-        }, 2000);
+        // Check for conflicts/failure
+        if (res.conflictReport && res.conflictReport.length > 0) {
+            if (force) {
+                 alert(`Schedule generated with ${res.conflictReport.length} rule violations (Hits). See stats for details.`);
+                 loadSchedule();
+            } else {
+                 // Strict mode failed
+                 renderConflictReport(res.conflictReport);
+                 new bootstrap.Modal(document.getElementById('conflictModal')).show();
+                 statusEl.classList.add('d-none');
+                 btn.disabled = false;
+                 return; // Stop here
+            }
+        } else {
+             // Clean success
+             statusEl.innerHTML = '<span class="text-success fw-bold">Done!</span>';
+             setTimeout(() => {
+                 statusEl.classList.add('d-none');
+                 statusEl.innerHTML = '';
+             }, 2000);
+             loadSchedule();
+        }
 
-        loadSchedule();
     } catch (e) {
         alert(e.message);
         statusEl.classList.add('d-none');
     } finally {
-        btn.disabled = false;
+        if (!document.querySelector('#conflictModal.show')) {
+            btn.disabled = false;
+        }
     }
-});
+}
+
+function renderConflictReport(report) {
+    const container = document.getElementById('conflict-report-list');
+    container.innerHTML = '';
+
+    report.forEach(item => {
+        let html = `<div class="card mb-2"><div class="card-body py-2">
+            <h6 class="card-title text-danger">${item.date} - ${item.shiftName}</h6>`;
+
+        if (item.failures) {
+            html += `<ul class="small mb-0 text-secondary">`;
+            item.failures.forEach(f => {
+                html += `<li><strong>${f.username}:</strong> ${f.reason}</li>`;
+            });
+            html += `</ul>`;
+        } else if (item.reason) {
+            html += `<p class="mb-0 text-danger small">${item.reason} ${item.username ? '('+item.username+')' : ''}</p>`;
+        }
+
+        html += `</div></div>`;
+        container.innerHTML += html;
+    });
+}
 
 async function loadSchedule() {
     const params = getScheduleParams();
@@ -696,8 +747,19 @@ function renderScheduleCalendarView(container, params, assignments, requests, sh
 
 function renderSiteUsersList(users) {
     const list = document.getElementById('site-users-list');
-    list.innerHTML = `<table class="table"><thead><tr><th>User</th><th>Role</th></tr></thead><tbody>
-        ${users.map(u => `<tr><td>${u.username}</td><td>${u.role}</td></tr>`).join('')}
+    // Uses global 'categories' loaded by loadCategories
+    list.innerHTML = `<table class="table"><thead><tr><th>User</th><th>Role</th><th>Category</th></tr></thead><tbody>
+        ${users.map(u => `
+            <tr>
+                <td>${u.username}</td>
+                <td>${u.role}</td>
+                <td>
+                    <select class="form-select form-select-sm" onchange="updateUserCategory(${u.id}, this.value)">
+                        <option value="">None</option>
+                        ${categories.map(c => `<option value="${c.id}" ${u.category_id === c.id ? 'selected' : ''}>${c.name}</option>`).join('')}
+                    </select>
+                </td>
+            </tr>`).join('')}
     </tbody></table>`;
 }
 
@@ -804,4 +866,83 @@ window.restoreSnapshot = async (id) => {
         alert(res.message);
         window.location.reload(); // Refresh to show restored state
     }
+};
+
+// --- Categories ---
+let categories = [];
+
+window.loadCategories = async (siteId) => {
+    const data = await apiClient.get(`/api/sites/${siteId}/categories`);
+    if(data.categories) {
+        categories = data.categories;
+        renderCategories();
+    }
+};
+
+function renderCategories() {
+    const tbody = document.querySelector('#categories-table tbody');
+    if(!tbody) return;
+    tbody.innerHTML = '';
+    categories.forEach(c => {
+        tbody.innerHTML += `
+            <tr>
+                <td>${c.priority}</td>
+                <td><span class="badge" style="background-color: ${c.color}; color: #000; border: 1px solid #ccc;">${c.name}</span></td>
+                <td><div style="width: 20px; height: 20px; background-color: ${c.color}; border: 1px solid #ccc;"></div></td>
+                <td>
+                    <button class="btn btn-sm btn-primary" onclick="openCategoryModal(${c.id})">Edit</button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteCategory(${c.id})">Delete</button>
+                </td>
+            </tr>
+        `;
+    });
+}
+
+window.openCategoryModal = (id=null) => {
+    const cat = id ? categories.find(c => c.id === id) : null;
+    document.getElementById('cat-id').value = id || '';
+    document.getElementById('cat-name').value = cat ? cat.name : '';
+    document.getElementById('cat-priority').value = cat ? cat.priority : 10;
+    document.getElementById('cat-color').value = cat ? cat.color : '#ffffff';
+
+    new bootstrap.Modal(document.getElementById('categoryModal')).show();
+};
+
+window.saveCategory = async () => {
+    const siteId = document.getElementById('site-dashboard-section').dataset.siteId;
+    const id = document.getElementById('cat-id').value;
+    const body = {
+        name: document.getElementById('cat-name').value,
+        priority: document.getElementById('cat-priority').value,
+        color: document.getElementById('cat-color').value
+    };
+
+    try {
+        if(id) {
+            await apiClient.put(`/api/categories/${id}`, body);
+        } else {
+            await apiClient.post(`/api/sites/${siteId}/categories`, body);
+        }
+        const modal = bootstrap.Modal.getInstance(document.getElementById('categoryModal'));
+        modal.hide();
+        loadCategories(siteId);
+        // Refresh users list if open, as category names might change
+        loadSchedule(); // This refreshes users too
+    } catch(e) { alert(e.message); }
+};
+
+window.deleteCategory = async (id) => {
+    if(confirm('Delete category? Users in this category will be unassigned.')) {
+        await apiClient.delete(`/api/categories/${id}`);
+        const siteId = document.getElementById('site-dashboard-section').dataset.siteId;
+        loadCategories(siteId);
+    }
+};
+
+window.updateUserCategory = async (userId, catId) => {
+    const siteId = document.getElementById('site-dashboard-section').dataset.siteId;
+    try {
+        await apiClient.put(`/api/sites/${siteId}/user-category`, { userId, categoryId: catId || null });
+        // Optional feedback
+    } catch(e) { alert(e.message); }
 };

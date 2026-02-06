@@ -88,12 +88,22 @@ class DBWrapper {
                 FOREIGN KEY(site_id) REFERENCES sites(id) ON DELETE CASCADE,
                 FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
             );
+            CREATE TABLE IF NOT EXISTS user_categories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                site_id INTEGER,
+                name TEXT,
+                priority INTEGER DEFAULT 10,
+                color TEXT DEFAULT '#ffffff',
+                FOREIGN KEY(site_id) REFERENCES sites(id) ON DELETE CASCADE
+            );
             CREATE TABLE IF NOT EXISTS site_users (
                 site_id INTEGER,
                 user_id INTEGER,
+                category_id INTEGER,
                 PRIMARY KEY (site_id, user_id),
                 FOREIGN KEY(site_id) REFERENCES sites(id) ON DELETE CASCADE,
-                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY(category_id) REFERENCES user_categories(id) ON DELETE SET NULL
             );
             CREATE TABLE IF NOT EXISTS global_settings (
                 key TEXT PRIMARY KEY,
@@ -106,6 +116,20 @@ class DBWrapper {
                 data BLOB
             );
         `);
+
+        // Migration: Add category_id to site_users if missing (for existing DBs)
+        try {
+            const result = this.db.exec("PRAGMA table_info(site_users)");
+            if (result.length > 0) {
+                const cols = result[0].values;
+                const hasCat = cols.some(c => c[1] === 'category_id');
+                if (!hasCat) {
+                    this.db.run("ALTER TABLE site_users ADD COLUMN category_id INTEGER");
+                }
+            }
+        } catch(e) {
+            console.error("Migration error:", e);
+        }
 
         // Seed Global Settings
         const globalCount = this.db.exec("SELECT COUNT(*) FROM global_settings")[0].values[0][0];

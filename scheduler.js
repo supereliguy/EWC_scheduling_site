@@ -13,7 +13,7 @@ const isNightShift = (shift) => {
 };
 
 // We attach to window so it can be called by api-router
-window.generateSchedule = async ({ siteId, startDate, days }) => {
+window.generateSchedule = async ({ siteId, startDate, days, force }) => {
     // Access global db wrapper
     const db = window.db;
 
@@ -49,11 +49,14 @@ window.generateSchedule = async ({ siteId, startDate, days }) => {
 
     const shifts = db.prepare('SELECT * FROM shifts WHERE site_id = ?').all(siteId);
 
-    // Get users for this site only
+    // Get users for this site only (join with categories)
     const users = db.prepare(`
-        SELECT u.id, u.username, u.role
+        SELECT u.id, u.username, u.role,
+               COALESCE(cat.priority, 10) as category_priority,
+               cat.name as category_name
         FROM users u
         JOIN site_users su ON u.id = su.user_id
+        LEFT JOIN user_categories cat ON su.category_id = cat.id
         WHERE su.site_id = ?
     `).all(siteId);
 
@@ -96,60 +99,139 @@ window.generateSchedule = async ({ siteId, startDate, days }) => {
     `).all(siteId, toDateStr(startObj), toDateStr(endObj));
 
     // 2. Algorithm: Randomized Greedy with Restarts
-    const ITERATIONS = 100;
-    let bestSchedule = null;
+    const ITERATIONS = force ? 1 : 100; // If forcing, just do one run? Or maybe still try a few to optimize 'hits'? Let's do fewer for force to avoid heavy compute if it's struggling.
+    // Actually, if force is true, we WANT to find the path of least resistance (fewest hits). So iterations are still good.
+    // But if force is false, we fail fast? No, we try to find a valid one.
+
+    let bestResult = null;
     let bestScore = -Infinity;
 
     for (let i = 0; i < ITERATIONS; i++) {
         const result = runGreedy({
             siteId, startObj, days,
             shifts, users, userSettings, requests,
-            prevAssignments, lockedAssignments
+            prevAssignments, lockedAssignments,
+            forceMode: !!force
         });
 
         if (result.score > bestScore) {
             bestScore = result.score;
-            bestSchedule = result.assignments;
+            bestResult = result;
         }
     }
 
-    if (!bestSchedule) {
-        throw new Error("Could not generate a valid schedule.");
+    if (!bestResult) {
+        throw new Error("Could not generate a schedule.");
     }
 
-    // 3. Save
-    const transaction = db.transaction(() => {
-        // Delete NON-LOCKED assignments for this period
-        const startStr = toDateStr(startObj);
-        const endStr = toDateStr(endObj);
-        db.prepare('DELETE FROM assignments WHERE site_id = ? AND date BETWEEN ? AND ? AND is_locked = 0')
-          .run(siteId, startStr, endStr);
+    // 3. Save (Only if NOT a dry run? No, we always save, but if it has conflicts, the user might reject it?)
+    // The user flow is: Generate -> See Conflicts -> Force.
+    // So if force is false and we have conflicts, we return them but DO NOT SAVE?
+    // Or we save the partial?
+    // User said: "Stop at the initial fail... give me list of problems... then click proceed".
+    // So we should NOT save if conflicts exist and force is false.
 
-        const insert = db.prepare('INSERT INTO assignments (site_id, date, shift_id, user_id, status, is_locked) VALUES (?, ?, ?, ?, ?, 0)');
-        for (const assign of bestSchedule) {
-             // Skip if it was already locked (it's already in DB)
-             if (!assign.isLocked) {
-                 insert.run(siteId, assign.date, assign.shiftId, assign.userId, 'draft');
-             }
-        }
-    });
+    const hasUnfilled = bestResult.assignments.length < (days * shifts.reduce((acc,s)=>acc+s.required_staff,0)) - (bestResult.conflictReport ? 0 : 0); // Logic check?
+    // Better check: did we fail to fill any slots?
+    // The conflictReport contains failures for unfilled slots.
+    const conflicts = bestResult.conflictReport || [];
+    const isComplete = conflicts.length === 0;
 
-    transaction();
+    if (force || isComplete) {
+        const transaction = db.transaction(() => {
+            // Delete NON-LOCKED assignments for this period
+            const startStr = toDateStr(startObj);
+            const endStr = toDateStr(endObj);
+            db.prepare('DELETE FROM assignments WHERE site_id = ? AND date BETWEEN ? AND ? AND is_locked = 0')
+              .run(siteId, startStr, endStr);
 
-    return { assignments: bestSchedule };
+            const insert = db.prepare('INSERT INTO assignments (site_id, date, shift_id, user_id, status, is_locked) VALUES (?, ?, ?, ?, ?, 0)');
+            for (const assign of bestResult.assignments) {
+                 // Skip if it was already locked (it's already in DB)
+                 if (!assign.isLocked) {
+                     insert.run(siteId, assign.date, assign.shiftId, assign.userId, 'draft');
+                 }
+            }
+        });
+        transaction();
+    }
+
+    return {
+        assignments: bestResult.assignments,
+        conflictReport: bestResult.conflictReport,
+        success: isComplete
+    };
 };
 
-const runGreedy = ({ siteId, startObj, days, shifts, users, userSettings, requests, prevAssignments, lockedAssignments }) => {
+const checkConstraints = (u, shift, dateStr, dateObj, state, settings, req) => {
+    // 0. Request Off (Hardest Constraint usually)
+    if (req && req.type === 'off') return { valid: false, reason: 'Requested Off' };
+
+    // 1. Max Consecutive
+    if (state.consecutive + 1 > settings.max_consecutive) return { valid: false, reason: `Max Consecutive Shifts (${settings.max_consecutive})` };
+
+    // 2. Strict Circadian (Night -> Day gap)
+    if (state.lastShift && isNightShift(state.lastShift) && !isNightShift(shift)) {
+        const gapDays = (dateObj - state.lastDate) / (1000 * 60 * 60 * 24);
+        if (gapDays <= 1.1) {
+             return { valid: false, reason: 'Inadequate Rest (Night -> Day)' };
+        }
+    }
+
+    return { valid: true, score: 0 };
+};
+
+const calculateScore = (u, shift, dateObj, state, settings, req) => {
+    let score = 0;
+    // 3. Preferences
+    if (req && req.type === 'work') score += 1000;
+
+    const rankIndex = settings.shift_ranking.indexOf(shift.name);
+    if (rankIndex !== -1) {
+            score += (settings.shift_ranking.length - rankIndex) * 50;
+    }
+
+    // 4. Targets
+    const needed = settings.target_shifts - state.totalAssigned;
+    score += needed * 10;
+
+    // 5. Block Size
+    if (state.currentBlockShiftId === shift.id) {
+        if (state.currentBlockSize < settings.preferred_block_size) {
+            score += 200;
+        } else {
+            score -= 100;
+        }
+    }
+
+    // 6. Soft Circadian
+    if (state.lastShift && isNightShift(state.lastShift) && !isNightShift(shift)) {
+        const gapDays = (dateObj - state.lastDate) / (1000 * 60 * 60 * 24);
+        if (gapDays <= 3) {
+             score -= 500;
+        }
+    }
+
+    // 7. Min Days Off
+    if (state.daysOff > 0 && state.daysOff < settings.min_days_off) {
+            score -= 2000;
+    }
+
+    return score;
+};
+
+const runGreedy = ({ siteId, startObj, days, shifts, users, userSettings, requests, prevAssignments, lockedAssignments, forceMode }) => {
     let assignments = [...lockedAssignments.map(a => ({
         date: a.date,
         shiftId: a.shift_id,
         userId: a.user_id,
         isLocked: true,
         shiftName: a.shift_name,
-        shiftObj: a // Keep full shift object for heuristics
+        shiftObj: a // Keep full shift object
     }))];
 
     let totalScore = 0;
+    const conflictReport = [];
 
     // Initialize User State
     const userState = {};
@@ -166,30 +248,25 @@ const runGreedy = ({ siteId, startObj, days, shifts, users, userSettings, reques
             const last = myPrev[myPrev.length - 1];
             lastShift = last;
             lastDate = new Date(last.date);
-
-            // Calculate gap to Start Date
-            // Note: startObj is local midnight. lastDate is also local midnight (from toDateStr)
             const gap = (startObj - lastDate) / (1000 * 60 * 60 * 24);
 
             if (gap <= 1) {
                 daysOff = 0;
-                // Count consecutive backwards
-                consecutive = 1;
+                consecutive = 1; // Simplification
+                // Iterate back for accurate consecutive
                 for(let i = myPrev.length - 2; i >= 0; i--) {
                     const curr = new Date(myPrev[i].date);
                     const next = new Date(myPrev[i+1].date);
                     if ((next - curr) / (1000 * 60 * 60 * 24) === 1) {
                         consecutive++;
-                    } else {
-                        break;
-                    }
+                    } else { break; }
                 }
             } else {
                 daysOff = Math.floor(gap) - 1;
                 consecutive = 0;
             }
         } else {
-            daysOff = 99; // Long time off
+            daysOff = 99;
         }
 
         userState[u.id] = {
@@ -198,31 +275,25 @@ const runGreedy = ({ siteId, startObj, days, shifts, users, userSettings, reques
             lastShift,
             lastDate,
             totalAssigned: 0,
+            hits: 0,
             currentBlockShiftId: lastShift ? lastShift.shift_id : null,
             currentBlockSize: consecutive
         };
     });
 
-    // Helper to update state
     const updateState = (uId, dateObj, shift, isWorked) => {
         const s = userState[uId];
-
         if (isWorked) {
             s.totalAssigned++;
-            if (s.daysOff === 0) {
-                s.consecutive++;
-            } else {
-                s.consecutive = 1;
-            }
+            if (s.daysOff === 0) s.consecutive++;
+            else s.consecutive = 1;
             s.daysOff = 0;
 
-            if (s.currentBlockShiftId === shift.id) {
-                s.currentBlockSize++;
-            } else {
+            if (s.currentBlockShiftId === shift.id) s.currentBlockSize++;
+            else {
                 s.currentBlockShiftId = shift.id;
                 s.currentBlockSize = 1;
             }
-
             s.lastShift = shift;
             s.lastDate = dateObj;
         } else {
@@ -233,7 +304,6 @@ const runGreedy = ({ siteId, startObj, days, shifts, users, userSettings, reques
         }
     };
 
-    // Iterate Days
     for (let i = 0; i < days; i++) {
         const dateObj = new Date(startObj);
         dateObj.setDate(startObj.getDate() + i);
@@ -242,6 +312,13 @@ const runGreedy = ({ siteId, startObj, days, shifts, users, userSettings, reques
         const lockedToday = assignments.filter(a => a.date === dateStr);
         const lockedUserIds = new Set(lockedToday.map(a => a.userId));
 
+        // State update for locked
+        lockedToday.forEach(a => {
+            const sObj = shifts.find(s => s.id === a.shiftId) || a.shiftObj;
+            updateState(a.userId, dateObj, sObj, true);
+        });
+
+        // Slots to fill
         const slotsToFill = [];
         shifts.forEach(s => {
             const lockedForThisShift = lockedToday.filter(a => a.shiftId === s.id);
@@ -249,84 +326,32 @@ const runGreedy = ({ siteId, startObj, days, shifts, users, userSettings, reques
             for(let k=0; k<needed; k++) slotsToFill.push(s);
         });
 
-        // Process Locked Users State Update
-        lockedToday.forEach(a => {
-            const sObj = shifts.find(s => s.id === a.shiftId) || a.shiftObj;
-            updateState(a.userId, dateObj, sObj, true);
-        });
-
-        // Fill remaining slots
-        const shuffledUsers = [...users].sort(() => Math.random() - 0.5);
         const assignedToday = new Set(lockedUserIds);
+        const shuffledUsers = [...users].sort(() => Math.random() - 0.5);
 
         for (const shift of slotsToFill) {
-            const candidates = shuffledUsers.filter(u => !assignedToday.has(u.id))
-                .map(u => {
-                    // Check Hard Constraints
-                    const state = userState[u.id];
-                    const settings = userSettings[u.id];
-                    const req = requests.find(r => r.user_id === u.id && r.date === dateStr);
+            const candidates = [];
 
-                    if (req && req.type === 'off') return null;
+            // 1. Strict Check
+            shuffledUsers.forEach(u => {
+                if (assignedToday.has(u.id)) return;
+                const state = userState[u.id];
+                const settings = userSettings[u.id];
+                const req = requests.find(r => r.user_id === u.id && r.date === dateStr);
 
-                    // 1. Max Consecutive
-                    if (state.consecutive + 1 > settings.max_consecutive) return null;
+                const check = checkConstraints(u, shift, dateStr, dateObj, state, settings, req);
+                if (check.valid) {
+                    // Add score
+                    const score = calculateScore(u, shift, dateObj, state, settings, req);
+                    candidates.push({ user: u, score, reason: null });
+                }
+            });
 
-                    // 2. Strict Circadian
-                    if (state.lastShift && isNightShift(state.lastShift) && !isNightShift(shift)) {
-                        const gapDays = (dateObj - state.lastDate) / (1000 * 60 * 60 * 24);
-                        if (gapDays <= 1.1) {
-                             return null;
-                        }
-                    }
-
-                    // Score
-                    let score = 0;
-
-                    // 3. Preferences
-                    if (req && req.type === 'work') score += 1000;
-
-                    const rankIndex = settings.shift_ranking.indexOf(shift.name);
-                    if (rankIndex !== -1) {
-                         score += (settings.shift_ranking.length - rankIndex) * 50;
-                    }
-
-                    // 4. Targets
-                    // Note: Target is usually monthly. If 'days' < 30, we should scale the target?
-                    // Or user sets "Target Shifts per Period".
-                    // For now, assuming target is for the period or month.
-                    const needed = settings.target_shifts - state.totalAssigned;
-                    score += needed * 10;
-
-                    // 5. Block Size
-                    if (state.currentBlockShiftId === shift.id) {
-                        if (state.currentBlockSize < settings.preferred_block_size) {
-                            score += 200;
-                        } else {
-                            score -= 100;
-                        }
-                    }
-
-                    // 6. Soft Circadian
-                    if (state.lastShift && isNightShift(state.lastShift) && !isNightShift(shift)) {
-                         const gapDays = (dateObj - state.lastDate) / (1000 * 60 * 60 * 24);
-                         if (gapDays <= 3) {
-                             score -= 500;
-                         }
-                    }
-
-                    // 7. Min Days Off
-                    if (state.daysOff > 0 && state.daysOff < settings.min_days_off) {
-                         score -= 2000;
-                    }
-
-                    return { user: u, score };
-                })
-                .filter(c => c !== null);
-
+            // Sort candidates by score
             candidates.sort((a, b) => b.score - a.score);
 
             if (candidates.length > 0) {
+                // Assign Best
                 const selected = candidates[0];
                 assignments.push({
                     date: dateStr,
@@ -338,10 +363,92 @@ const runGreedy = ({ siteId, startObj, days, shifts, users, userSettings, reques
                 totalScore += selected.score;
                 updateState(selected.user.id, dateObj, shift, true);
             } else {
-                totalScore -= 10000;
+                // No Strict Candidates
+                if (forceMode) {
+                    // Fallback Logic (Sacrifice)
+                    const sacrificeCandidates = users.filter(u => !assignedToday.has(u.id)).map(u => {
+                        const state = userState[u.id];
+                        const settings = userSettings[u.id];
+                        const req = requests.find(r => r.user_id === u.id && r.date === dateStr);
+
+                        // Calculate Violation Severity?
+                        // For now, we just want to know WHY they failed to report it
+                        const check = checkConstraints(u, shift, dateStr, dateObj, state, settings, req);
+
+                        return {
+                            user: u,
+                            failReason: check.reason,
+                            hits: state.hits,
+                            priority: u.category_priority
+                        };
+                    });
+
+                    // Sort for Sacrifice:
+                    // 1. Highest Priority Number (Lowest Importance) -> Descending
+                    // 2. Fewest Hits -> Ascending
+                    sacrificeCandidates.sort((a, b) => {
+                        if (a.priority !== b.priority) return b.priority - a.priority; // 10 before 1
+                        return a.hits - b.hits; // 0 hits before 5 hits
+                    });
+
+                    if (sacrificeCandidates.length > 0) {
+                        const victim = sacrificeCandidates[0];
+
+                        // Apply assignment
+                        assignments.push({
+                            date: dateStr,
+                            shiftId: shift.id,
+                            userId: victim.user.id,
+                            isLocked: false,
+                            isHit: true,
+                            hitReason: victim.failReason
+                        });
+                        assignedToday.add(victim.user.id);
+
+                        // Update Hits
+                        userState[victim.user.id].hits++;
+
+                        // Record Conflict
+                        conflictReport.push({
+                            date: dateStr,
+                            shiftId: shift.id,
+                            shiftName: shift.name,
+                            userId: victim.user.id,
+                            username: victim.user.username,
+                            reason: `Forced: ${victim.failReason}`
+                        });
+
+                        updateState(victim.user.id, dateObj, shift, true);
+                        totalScore -= 5000; // Big penalty but filled
+
+                    } else {
+                        // Literally no users left (all assigned?)
+                        conflictReport.push({ date: dateStr, shiftId: shift.id, shiftName: shift.name, reason: "No available users (all working)" });
+                        totalScore -= 10000;
+                    }
+
+                } else {
+                    // Report Failure Reasons for this slot
+                    const failures = users.filter(u => !assignedToday.has(u.id)).map(u => {
+                         const state = userState[u.id];
+                         const settings = userSettings[u.id];
+                         const req = requests.find(r => r.user_id === u.id && r.date === dateStr);
+                         const check = checkConstraints(u, shift, dateStr, dateObj, state, settings, req);
+                         return { username: u.username, reason: check.reason };
+                    });
+
+                    conflictReport.push({
+                        date: dateStr,
+                        shiftId: shift.id,
+                        shiftName: shift.name,
+                        failures
+                    });
+                    totalScore -= 10000;
+                }
             }
         }
 
+        // Update state for those not working
         users.forEach(u => {
             if (!assignedToday.has(u.id)) {
                 updateState(u.id, dateObj, null, false);
@@ -349,5 +456,5 @@ const runGreedy = ({ siteId, startObj, days, shifts, users, userSettings, reques
         });
     }
 
-    return { assignments, score: totalScore };
+    return { assignments, score: totalScore, conflictReport };
 };

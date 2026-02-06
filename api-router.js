@@ -238,10 +238,10 @@ api.put('/api/schedule/assignment', (req, res) => {
 
 api.post('/api/schedule/generate', async (req, res) => {
     try {
-        const { siteId, startDate, days } = req.body;
+        const { siteId, startDate, days, force } = req.body;
         // Call the global function exposed by scheduler.js
-        const result = await window.generateSchedule({ siteId, startDate, days: parseInt(days) });
-        res.json({ message: 'Generated', assignments: result.assignments });
+        const result = await window.generateSchedule({ siteId, startDate, days: parseInt(days), force: !!force });
+        res.json({ message: 'Generated', assignments: result.assignments, conflictReport: result.conflictReport });
     } catch(e) {
         res.status(500).json({ error: e.message });
     }
@@ -249,12 +249,44 @@ api.post('/api/schedule/generate', async (req, res) => {
 
 api.get('/api/sites/:siteId/users', (req, res) => {
     const users = db.prepare(`
-        SELECT u.id, u.username, u.role
+        SELECT u.id, u.username, u.role, su.category_id, c.name as category_name, c.color as category_color
         FROM users u
         JOIN site_users su ON u.id = su.user_id
+        LEFT JOIN user_categories c ON su.category_id = c.id
         WHERE su.site_id = ?
     `).all(req.params.siteId);
     res.json({ users });
+});
+
+// Categories
+api.get('/api/sites/:siteId/categories', (req, res) => {
+    const cats = db.prepare('SELECT * FROM user_categories WHERE site_id = ? ORDER BY priority ASC').all(req.params.siteId);
+    res.json({ categories: cats });
+});
+
+api.post('/api/sites/:siteId/categories', (req, res) => {
+    const { name, priority, color } = req.body;
+    db.prepare('INSERT INTO user_categories (site_id, name, priority, color) VALUES (?, ?, ?, ?)').run(req.params.siteId, name, priority, color || '#ffffff');
+    res.json({ message: 'Category created' });
+});
+
+api.put('/api/categories/:id', (req, res) => {
+    const { name, priority, color } = req.body;
+    db.prepare('UPDATE user_categories SET name=?, priority=?, color=? WHERE id=?').run(name, priority, color, req.params.id);
+    res.json({ message: 'Category updated' });
+});
+
+api.delete('/api/categories/:id', (req, res) => {
+    db.prepare('DELETE FROM user_categories WHERE id=?').run(req.params.id);
+    res.json({ message: 'Category deleted' });
+});
+
+// Update User Category
+api.put('/api/sites/:siteId/user-category', (req, res) => {
+    const { userId, categoryId } = req.body;
+    db.prepare('UPDATE site_users SET category_id = ? WHERE site_id = ? AND user_id = ?')
+      .run(categoryId || null, req.params.siteId, userId);
+    res.json({ message: 'User category updated' });
 });
 
 api.put('/api/sites/:siteId/users', (req, res) => {

@@ -127,6 +127,7 @@
                     <ul class="nav nav-tabs mb-3">
                         <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#sd-schedule">Schedule</a></li>
                         <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#sd-users">Users</a></li>
+                        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#sd-categories">Categories</a></li>
                         <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#sd-stats">Stats</a></li>
                     </ul>
 
@@ -169,6 +170,19 @@
                             <div id="site-users-list"></div>
                         </div>
 
+                        <!-- Categories -->
+                        <div class="tab-pane fade" id="sd-categories">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h4>User Categories</h4>
+                                <button class="btn btn-primary" onclick="openCategoryModal()">Add Category</button>
+                            </div>
+                            <p class="text-muted small">Lower priority number means higher importance (e.g. 1 is more important than 10). Higher importance users are prioritized during conflict resolution.</p>
+                            <table class="table table-bordered" id="categories-table">
+                                <thead><tr><th>Priority</th><th>Name</th><th>Color</th><th>Actions</th></tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+
                         <!-- Stats -->
                         <div class="tab-pane fade" id="sd-stats">
                             <h4>Fairness & Stats</h4>
@@ -177,6 +191,31 @@
                     </div>
                 </div>
 
+            </div>
+        </div>
+    </div>
+
+    <!-- Conflict Modal -->
+    <div class="modal fade" id="conflictModal" tabindex="-1" data-bs-backdrop="static">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title text-dark">Schedule Conflicts Detected</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="lead">The schedule could not be fully generated due to the following constraints:</p>
+                    <div id="conflict-report-list" style="max-height: 400px; overflow-y: auto; background: #f8f9fa; padding: 10px; border: 1px solid #ddd;">
+                        <!-- conflicts -->
+                    </div>
+                    <div class="alert alert-info mt-3">
+                        <strong>Recommendation:</strong> You can choose to "Force Fill", which will break the lowest priority rules (based on User Categories) to ensure all slots are filled.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-danger fw-bold" onclick="forceGenerateSchedule()">Force Fill (Break Rules)</button>
+                </div>
             </div>
         </div>
     </div>
@@ -256,6 +295,24 @@
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-success" onclick="saveUserRequests()">Save Requests</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Modal -->
+    <div class="modal fade" id="categoryModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header"><h5 class="modal-title">Edit Category</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <input type="hidden" id="cat-id">
+                    <div class="mb-3"><label>Name</label><input type="text" class="form-control" id="cat-name"></div>
+                    <div class="mb-3"><label>Priority (Lower number = Higher Importance)</label><input type="number" class="form-control" id="cat-priority" value="10"></div>
+                    <div class="mb-3"><label>Color</label><input type="color" class="form-control form-control-color" id="cat-color" value="#ffffff"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" onclick="saveCategory()">Save</button>
                 </div>
             </div>
         </div>
