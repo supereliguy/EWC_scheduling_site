@@ -15,25 +15,6 @@
         }
         /* Admin layout overrides */
         .section-content { display: none; }
-
-        .calendar-grid {
-            display: grid;
-            grid-template-columns: repeat(7, 1fr);
-            gap: 5px;
-            margin-top: 20px;
-            user-select: none; /* Prevent text selection while painting */
-        }
-        .calendar-day {
-            border: 1px solid #ddd;
-            min-height: 80px;
-            padding: 5px;
-            background: #fff;
-            position: relative;
-            cursor: pointer;
-        }
-        .calendar-day.work { background-color: #c8e6c9; }
-        .calendar-day.off { background-color: #ffcdd2; }
-        .calendar-day:hover { border-color: #666; }
     </style>
 </head>
 <body>
@@ -161,7 +142,10 @@
                                 </div>
                                 <div class="col-md-7">
                                     <button class="btn btn-info text-white" id="load-schedule-btn">Load</button>
-                                    <button class="btn btn-warning text-dark" id="generate-schedule-btn">Auto-Schedule</button>
+                                    <button class="btn btn-warning btn-lg text-dark fw-bold shadow-sm" id="generate-schedule-btn">Auto-Schedule</button>
+                                    <span id="generation-status" class="ms-2 d-none fw-bold text-info">
+                                        <span class="spinner-border spinner-border-sm" role="status"></span> Generating...
+                                    </span>
                                     <button class="btn btn-secondary" onclick="openSnapshotsModal()">Undo/History</button>
                                 </div>
                             </div>

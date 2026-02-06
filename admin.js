@@ -275,12 +275,12 @@ function renderSites() {
         tbody.innerHTML += `
             <tr>
                 <td>${s.id}</td>
-                <td><a href="#" onclick="enterSite(${s.id}); return false;">${s.name}</a></td>
+                <td><a href="#" onclick="enterSite(${s.id}); return false;" class="fs-5 fw-bold text-decoration-none">${s.name}</a></td>
                 <td>
-                    <button class="btn btn-sm btn-primary" onclick="enterSite(${s.id})">Enter</button>
-                    <button class="btn btn-sm btn-secondary" onclick="openSiteUsersModal(${s.id})">Users</button>
-                    <button class="btn btn-sm btn-info" onclick="loadShifts(${s.id})">Shifts</button>
-                    <button class="btn btn-sm btn-danger" onclick="deleteSite(${s.id})">Delete</button>
+                    <button class="btn btn-success fw-bold px-3" onclick="enterSite(${s.id})">Enter Dashboard</button>
+                    <button class="btn btn-sm btn-secondary ms-2" onclick="openSiteUsersModal(${s.id})">Users</button>
+                    <button class="btn btn-sm btn-info ms-1" onclick="loadShifts(${s.id})">Shifts</button>
+                    <button class="btn btn-sm btn-danger ms-1" onclick="deleteSite(${s.id})">Delete</button>
                 </td>
             </tr>
         `;
@@ -442,9 +442,35 @@ document.getElementById('generate-schedule-btn').addEventListener('click', async
     const params = getScheduleParams();
     if(!params.siteId) return alert('Select site');
     if(!params.startDate) return alert('Select start date');
-    const res = await apiClient.post('/api/schedule/generate', params);
-    alert(res.message);
-    loadSchedule();
+
+    const statusEl = document.getElementById('generation-status');
+    const btn = document.getElementById('generate-schedule-btn');
+
+    // UI Feedback
+    statusEl.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Generating...';
+    statusEl.classList.remove('d-none');
+    btn.disabled = true;
+
+    // Allow UI to render before blocking
+    await new Promise(r => setTimeout(r, 100));
+
+    try {
+        await apiClient.post('/api/schedule/generate', params);
+
+        // Success Feedback
+        statusEl.innerHTML = '<span class="text-success fw-bold">Done!</span>';
+        setTimeout(() => {
+             statusEl.classList.add('d-none');
+             statusEl.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Generating...';
+        }, 2000);
+
+        loadSchedule();
+    } catch (e) {
+        alert(e.message);
+        statusEl.classList.add('d-none');
+    } finally {
+        btn.disabled = false;
+    }
 });
 
 async function loadSchedule() {

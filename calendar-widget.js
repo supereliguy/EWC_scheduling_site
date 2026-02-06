@@ -57,7 +57,9 @@ export class CalendarWidget {
 
         // Padding for first week
         for (let i = 0; i < firstDay.getDay(); i++) {
-            this.container.appendChild(document.createElement('div'));
+            const el = document.createElement('div');
+            el.classList.add('calendar-day', 'empty');
+            this.container.appendChild(el);
         }
 
         // Days
@@ -88,6 +90,17 @@ export class CalendarWidget {
             }
 
             this.container.appendChild(dayEl);
+        }
+
+        // Padding for last week
+        const used = firstDay.getDay() + lastDay.getDate();
+        const remaining = 7 - (used % 7);
+        if (remaining < 7) {
+            for(let i=0; i<remaining; i++) {
+                 const el = document.createElement('div');
+                 el.classList.add('calendar-day', 'empty');
+                 this.container.appendChild(el);
+            }
         }
     }
 
