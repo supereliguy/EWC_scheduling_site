@@ -70,43 +70,4 @@ button:hover {
     background-color: #0056b3;
 }
 
-/* Modal Styles */
-.modal {
-    position: fixed;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
-.modal-content {
-    background: white;
-    padding: 20px;
-    border-radius: 8px;
-    text-align: center;
-}
-
-.modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1em;
-}
-
-.month-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-}
-
-.month-grid button {
-    padding: 1em;
-}
-
-#goto-today-btn {
-    margin-top: 1em;
-}
+/* Modal Styles removed in favor of Bootstrap */

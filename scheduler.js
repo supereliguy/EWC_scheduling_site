@@ -1,4 +1,4 @@
-const db = require('../db');
+// scheduler.js - Converted to ES Module-like syntax for browser, using global 'db' object
 
 const toDateStr = (d) => {
     return `${d.getFullYear()}-${(d.getMonth()+1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
@@ -12,9 +12,11 @@ const isNightShift = (shift) => {
     return e < s || s >= 20;
 };
 
-const getShiftType = (shift) => shift ? shift.name : null;
+// We attach to window so it can be called by api-router
+window.generateSchedule = async ({ siteId, month, year }) => {
+    // Access global db wrapper
+    const db = window.db;
 
-const generateSchedule = async ({ siteId, month, year }) => {
     const startDate = new Date(year, month - 1, 1);
     const endDate = new Date(year, month, 0); // Last day of month
     const daysInMonth = endDate.getDate();
@@ -87,10 +89,6 @@ const generateSchedule = async ({ siteId, month, year }) => {
             prevAssignments, lockedAssignments
         });
 
-        // Basic check: Did we fill all required slots?
-        // Actually, we might not be able to if constraints are tight.
-        // We prefer a valid schedule with gaps over an invalid one?
-        // Or we prioritize score.
         if (result.score > bestScore) {
             bestScore = result.score;
             bestSchedule = result.assignments;
@@ -120,7 +118,7 @@ const generateSchedule = async ({ siteId, month, year }) => {
 
     transaction();
 
-    return { assignments: bestSchedule }; // Returns mixed list, but UI reloads anyway
+    return { assignments: bestSchedule };
 };
 
 const runGreedy = ({ siteId, month, year, daysInMonth, shifts, users, userSettings, requests, prevAssignments, lockedAssignments }) => {
@@ -138,9 +136,6 @@ const runGreedy = ({ siteId, month, year, daysInMonth, shifts, users, userSettin
     // Initialize User State
     const userState = {};
     users.forEach(u => {
-        // Reconstruct history from prevAssignments
-        // We need: consecutive shifts, days off, last shift type, last shift date
-
         // Find last worked day in prevAssignments
         const myPrev = prevAssignments.filter(a => a.user_id === u.id).sort((a,b) => new Date(a.date) - new Date(b.date));
 
@@ -149,8 +144,6 @@ const runGreedy = ({ siteId, month, year, daysInMonth, shifts, users, userSettin
         let lastShift = null;
         let lastDate = null;
 
-        // Trace back from day 0 backwards? Or just simulate forward?
-        // Simpler: Just look at the very last assignment.
         if (myPrev.length > 0) {
             const last = myPrev[myPrev.length - 1];
             lastShift = last;
@@ -174,7 +167,7 @@ const runGreedy = ({ siteId, month, year, daysInMonth, shifts, users, userSettin
                     }
                 }
             } else {
-                daysOff = Math.floor(gap) - 1; // if last worked 28th, and today is 1st. 29,30,31 off.
+                daysOff = Math.floor(gap) - 1;
                 consecutive = 0;
             }
         } else {
@@ -184,11 +177,11 @@ const runGreedy = ({ siteId, month, year, daysInMonth, shifts, users, userSettin
         userState[u.id] = {
             consecutive,
             daysOff,
-            lastShift, // Shift Object
-            lastDate,  // Date Object
+            lastShift,
+            lastDate,
             totalAssigned: 0,
             currentBlockShiftId: lastShift ? lastShift.shift_id : null,
-            currentBlockSize: consecutive // Approx
+            currentBlockSize: consecutive
         };
     });
 
@@ -228,17 +221,9 @@ const runGreedy = ({ siteId, month, year, daysInMonth, shifts, users, userSettin
         const dateStr = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
         const dateObj = new Date(dateStr);
 
-        // Identify who is already locked today
         const lockedToday = assignments.filter(a => a.date === dateStr);
         const lockedUserIds = new Set(lockedToday.map(a => a.userId));
 
-        // Update state for locked users FIRST?
-        // No, we should process shifts, and if a shift is locked, we just skip "assigning" it but we record it.
-        // Actually, easiest is: For each shift type required, check if locked users satisfy it.
-        // If locked user has Shift A, they fill a slot for Shift A.
-
-        // However, `shifts` loop drives the assignment.
-        // Let's create a "Slots to Fill" map.
         const slotsToFill = [];
         shifts.forEach(s => {
             const lockedForThisShift = lockedToday.filter(a => a.shiftId === s.id);
@@ -246,16 +231,15 @@ const runGreedy = ({ siteId, month, year, daysInMonth, shifts, users, userSettin
             for(let k=0; k<needed; k++) slotsToFill.push(s);
         });
 
-        // Process Locked Users State Update (Critical for constraints validation)
+        // Process Locked Users State Update
         lockedToday.forEach(a => {
-            // Find the shift object
-            const sObj = shifts.find(s => s.id === a.shiftId) || a.shiftObj; // Fallback
+            const sObj = shifts.find(s => s.id === a.shiftId) || a.shiftObj;
             updateState(a.userId, dateStr, sObj, true);
         });
 
-        // Now fill remaining slots
+        // Fill remaining slots
         const shuffledUsers = [...users].sort(() => Math.random() - 0.5);
-        const assignedToday = new Set(lockedUserIds); // Track who is working today
+        const assignedToday = new Set(lockedUserIds);
 
         for (const shift of slotsToFill) {
             const candidates = shuffledUsers.filter(u => !assignedToday.has(u.id))
@@ -268,15 +252,13 @@ const runGreedy = ({ siteId, month, year, daysInMonth, shifts, users, userSettin
                     if (req && req.type === 'off') return null;
 
                     // 1. Max Consecutive
-                    if (state.consecutive + 1 > settings.max_consecutive) return null; // Hard limit
+                    if (state.consecutive + 1 > settings.max_consecutive) return null;
 
-                    // 2. Strict Circadian (Last was Night, Today is Day/Early)
+                    // 2. Strict Circadian
                     if (state.lastShift && isNightShift(state.lastShift) && !isNightShift(shift)) {
-                        // Check gap.
-                        // If yesterday was last worked:
                         const gapDays = (dateObj - state.lastDate) / (1000 * 60 * 60 * 24);
-                        if (gapDays <= 1.1) { // 1 day diff
-                             return null; // Forbidden Night -> Day
+                        if (gapDays <= 1.1) {
+                             return null;
                         }
                     }
 
@@ -286,10 +268,9 @@ const runGreedy = ({ siteId, month, year, daysInMonth, shifts, users, userSettin
                     // 3. Preferences
                     if (req && req.type === 'work') score += 1000;
 
-                    // Shift Ranking
                     const rankIndex = settings.shift_ranking.indexOf(shift.name);
                     if (rankIndex !== -1) {
-                         score += (settings.shift_ranking.length - rankIndex) * 50; // Top rank gets most points
+                         score += (settings.shift_ranking.length - rankIndex) * 50;
                     }
 
                     // 4. Targets
@@ -299,24 +280,23 @@ const runGreedy = ({ siteId, month, year, daysInMonth, shifts, users, userSettin
                     // 5. Block Size
                     if (state.currentBlockShiftId === shift.id) {
                         if (state.currentBlockSize < settings.preferred_block_size) {
-                            score += 200; // Encourage continuing block
+                            score += 200;
                         } else {
-                            score -= 100; // Encourage breaking block
+                            score -= 100;
                         }
                     }
 
-                    // 6. Soft Circadian (Night -> Day < 72h)
+                    // 6. Soft Circadian
                     if (state.lastShift && isNightShift(state.lastShift) && !isNightShift(shift)) {
                          const gapDays = (dateObj - state.lastDate) / (1000 * 60 * 60 * 24);
                          if (gapDays <= 3) {
-                             score -= 500; // Penalize
+                             score -= 500;
                          }
                     }
 
-                    // 7. Min Days Off (If I worked recently and haven't rested enough)
-                    // If daysOff > 0 (just came off work), check if daysOff < min_days_off
+                    // 7. Min Days Off
                     if (state.daysOff > 0 && state.daysOff < settings.min_days_off) {
-                         score -= 2000; // Strong penalty (almost hard constraint)
+                         score -= 2000;
                     }
 
                     return { user: u, score };
@@ -337,11 +317,10 @@ const runGreedy = ({ siteId, month, year, daysInMonth, shifts, users, userSettin
                 totalScore += selected.score;
                 updateState(selected.user.id, dateStr, shift, true);
             } else {
-                totalScore -= 10000; // Failed to fill slot
+                totalScore -= 10000;
             }
         }
 
-        // Update state for those OFF today
         users.forEach(u => {
             if (!assignedToday.has(u.id)) {
                 updateState(u.id, dateStr, null, false);
@@ -351,5 +330,3 @@ const runGreedy = ({ siteId, month, year, daysInMonth, shifts, users, userSettin
 
     return { assignments, score: totalScore };
 };
-
-module.exports = { generateSchedule };

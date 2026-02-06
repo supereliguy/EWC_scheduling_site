@@ -1,47 +1,29 @@
-# Local Schedule Manager
+# Ultimate Scheduler (Web Edition)
 
-A local, offline desktop application for managing work schedules. Built with Electron, Node.js, and SQLite.
+This is a **client-side only** version of the Ultimate Scheduler. It runs entirely in your browser using `sql.js` (WebAssembly SQLite) and IndexedDB for persistence.
 
 ## Features
 
-*   **Local & Secure:** No cloud server, all data stored locally on your machine in `schedule.db`.
-*   **Smart Scheduling:** Randomized greedy algorithm that respects:
-    *   Hard constraints (Locked assignments, Max consecutive shifts).
-    *   Circadian Rhythms (Strict & Soft constraints).
-    *   User Preferences (Shift Rankings, Block Sizes, Targets).
-*   **Manual Control:** Spreadsheet-style editor to pre-assign or fix shifts.
-*   **Recovery:** Snapshot system to save/restore database states.
+*   **Zero Install:** Runs directly in any modern browser.
+*   **Local Persistence:** Data is saved to your browser's local storage.
+*   **Export/Import:** Backup your database to a file and restore it on another device.
+*   **Privacy:** No data is sent to any server. Everything stays on your machine.
+*   **Schedule Generation:** Automated scheduling algorithm runs locally.
 
-## Installation & Running (Source Code)
+## Hosting on GitHub Pages
 
-1.  Install [Node.js](https://nodejs.org/).
-2.  Install dependencies:
-    ```bash
-    npm install
-    ```
-3.  Start the application:
-    ```bash
-    npm start
-    ```
-    Or run `start.bat` on Windows.
+1.  Push this repository to GitHub.
+2.  Go to **Settings** -> **Pages**.
+3.  Set **Source** to `Deploy from a branch`.
+4.  Select `main` (or your default branch) and `/ (root)`.
+5.  Save.
+6.  Your site will be live at `https://<username>.github.io/<repo-name>/`.
 
-## Building for Windows (Creating .exe)
+## Local Development
 
-To create a standalone installer or portable USB version:
+You can run this locally using any static file server.
 
-1.  Run the build command:
-    ```bash
-    npm run dist
-    ```
-2.  Find the generated `.exe` files in the `dist/` folder.
-    *   `UltimateScheduler_Portable.exe`: Runs without installation (great for USBs).
-    *   `Ultimate Scheduler Setup...exe`: Standard installer.
-
-See `BUILD_INSTRUCTIONS.md` for more details.
-
-## Development
-
-*   `main.js`: Electron entry point.
-*   `src/app.js`: Express backend (running locally).
-*   `src/lib/scheduler.js`: Scheduling algorithm.
-*   `public/`: Frontend assets.
+```bash
+npm start
+```
+(Requires `npx` installed via Node.js, but the app itself needs no Node.js backend).

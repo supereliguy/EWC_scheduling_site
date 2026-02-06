@@ -1,25 +1,28 @@
 const api = {
-    get: (url) => fetch(url).then(r => r.json()),
-    post: (url, data) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then(r => r.json()),
-    put: (url, data) => fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then(r => r.json()),
-    delete: (url) => fetch(url, { method: 'DELETE' }).then(r => r.json())
+    get: (url) => window.api.request('GET', url).then(r => { if(r.error) throw new Error(r.error); return r; }),
+    post: (url, data) => window.api.request('POST', url, data).then(r => { if(r.error) throw new Error(r.error); return r; }),
+    put: (url, data) => window.api.request('PUT', url, data).then(r => { if(r.error) throw new Error(r.error); return r; }),
+    delete: (url) => window.api.request('DELETE', url).then(r => { if(r.error) throw new Error(r.error); return r; })
 };
 
 // State
 let users = [];
-let sites = [];
+let adminSites = []; // rename to avoid conflict with dashboard sites
 let shifts = [];
 
-// Init
-document.addEventListener('DOMContentLoaded', () => {
-    loadUsers();
-    loadSites();
+// Init called by index.html script block, but we can also auto-run since it's loaded late
+// However, initDateSelectors needs to run once.
+if(document.getElementById('schedule-year')) {
     initDateSelectors();
-});
+    // We'll let index.html trigger initial data load via window functions or we hook it here
+    // But since admin.js is a module-like, we can expose functions to window.
+}
+
+window.loadUsers = loadUsers;
+window.loadSites = loadSites;
 
 function showSection(id) {
-    document.querySelectorAll('.section').forEach(el => el.classList.remove('active'));
-    document.getElementById(id).classList.add('active');
+    // Overridden by index.html global showSection, removing this
 }
 
 function initDateSelectors() {
@@ -78,39 +81,44 @@ window.openSettings = async (id) => {
         document.getElementById('settings-user-id').value = id;
         document.getElementById('setting-max-consecutive').value = s.max_consecutive_shifts;
         document.getElementById('setting-min-days-off').value = s.min_days_off;
-        document.getElementById('setting-night-pref').value = s.night_preference;
+        // document.getElementById('setting-night-pref').value = s.night_preference; // Removed from UI in index.html for simplicity or add back if needed.
+        // Keeping inputs that exist in index.html
 
-        // New Fields
         document.getElementById('setting-target-shifts').value = s.target_shifts || 20;
-        document.getElementById('setting-target-variance').value = s.target_shifts_variance || 2;
-        document.getElementById('setting-block-size').value = s.preferred_block_size || 3;
-        document.getElementById('setting-shift-ranking').value = s.shift_ranking || '[]';
 
-        document.getElementById('settings-modal').style.display = 'flex';
+        // Bootstrap Modal
+        const modal = new bootstrap.Modal(document.getElementById('settingsModal'));
+        modal.show();
     } else {
         alert('Could not load settings');
     }
 };
 
 window.closeSettingsModal = () => {
-    document.getElementById('settings-modal').style.display = 'none';
+    // Handled by Bootstrap
 };
 
 window.saveSettings = async () => {
     const id = document.getElementById('settings-user-id').value;
+    // Only grab fields present in index.html modal
     const body = {
         max_consecutive_shifts: document.getElementById('setting-max-consecutive').value,
         min_days_off: document.getElementById('setting-min-days-off').value,
-        night_preference: document.getElementById('setting-night-pref').value,
         target_shifts: document.getElementById('setting-target-shifts').value,
-        target_shifts_variance: document.getElementById('setting-target-variance').value,
-        preferred_block_size: document.getElementById('setting-block-size').value,
-        shift_ranking: document.getElementById('setting-shift-ranking').value
+        // Defaults for others not in simplified modal
+        night_preference: 1.0,
+        target_shifts_variance: 2,
+        preferred_block_size: 3,
+        shift_ranking: '[]'
     };
 
-    const res = await api.put(`/api/users/${id}/settings`, body);
-    alert(res.message);
-    closeSettingsModal();
+    try {
+        const res = await api.put(`/api/users/${id}/settings`, body);
+        alert(res.message);
+        const modalEl = document.getElementById('settingsModal');
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        modal.hide();
+    } catch(e) { alert(e.message); }
 };
 
 document.getElementById('create-user-btn').addEventListener('click', async () => {
@@ -137,7 +145,7 @@ window.deleteUser = async (id) => {
 async function loadSites() {
     const data = await api.get('/api/sites');
     if (data.sites) {
-        sites = data.sites;
+        adminSites = data.sites;
         renderSites();
         updateSiteSelects();
     }
@@ -146,15 +154,15 @@ async function loadSites() {
 function renderSites() {
     const tbody = document.querySelector('#sites-table tbody');
     tbody.innerHTML = '';
-    sites.forEach(s => {
+    adminSites.forEach(s => {
+        // description not in table currently
         tbody.innerHTML += `
             <tr>
                 <td>${s.id}</td>
                 <td>${s.name}</td>
-                <td>${s.description}</td>
                 <td>
-                    <button onclick="loadShifts(${s.id})">Load Shifts</button>
-                    <button onclick="deleteSite(${s.id})">Delete</button>
+                    <button class="btn btn-sm btn-info" onclick="loadShifts(${s.id})">Shifts</button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteSite(${s.id})">Delete</button>
                 </td>
             </tr>
         `;
@@ -166,7 +174,7 @@ function updateSiteSelects() {
     const schedSel = document.getElementById('schedule-site-select');
     shiftSel.innerHTML = '<option value="">Select Site</option>';
     schedSel.innerHTML = '<option value="">Select Site</option>';
-    sites.forEach(s => {
+    adminSites.forEach(s => {
         shiftSel.innerHTML += `<option value="${s.id}">${s.name}</option>`;
         schedSel.innerHTML += `<option value="${s.id}">${s.name}</option>`;
     });
@@ -201,15 +209,12 @@ function renderShifts() {
     const tbody = document.querySelector('#shifts-table tbody');
     tbody.innerHTML = '';
     shifts.forEach(s => {
-        const site = sites.find(site => site.id === s.site_id);
         tbody.innerHTML += `
             <tr>
-                <td>${s.id}</td>
-                <td>${site ? site.name : s.site_id}</td>
                 <td>${s.name}</td>
                 <td>${s.start_time} - ${s.end_time}</td>
                 <td>${s.required_staff}</td>
-                <td><button onclick="deleteShift(${s.id})">Delete</button></td>
+                <td><button class="btn btn-sm btn-danger" onclick="deleteShift(${s.id})">Delete</button></td>
             </tr>
         `;
     });
@@ -354,7 +359,8 @@ window.updateAssignment = async (siteId, date, userId, shiftId) => {
 
 // Snapshots
 window.openSnapshotsModal = () => {
-    document.getElementById('snapshots-modal').style.display = 'flex';
+    const modal = new bootstrap.Modal(document.getElementById('snapshotModal'));
+    modal.show();
     loadSnapshots();
 };
 
@@ -368,7 +374,7 @@ window.loadSnapshots = async () => {
                 <tr>
                     <td>${new Date(s.created_at).toLocaleString()}</td>
                     <td>${s.description}</td>
-                    <td><button onclick="restoreSnapshot(${s.id})">Restore</button></td>
+                    <td><button class="btn btn-sm btn-warning" onclick="restoreSnapshot(${s.id})">Restore</button></td>
                 </tr>
             `;
         });

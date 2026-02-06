@@ -1,45 +1,8 @@
 {
-  "name": "schedule-app",
-  "version": "2.0.1",
-  "description": "Local Schedule Manager",
-  "main": "main.js",
-  "author": "Ultimate Scheduler",
+  "name": "schedule-app-web",
+  "version": "3.0.0",
+  "description": "Local Browser-based Schedule Manager",
   "scripts": {
-    "start": "electron .",
-    "postinstall": "electron-builder install-app-deps",
-    "dist": "electron-builder --win nsis portable",
-    "pack": "electron-builder --dir"
-  },
-  "dependencies": {
-    "better-sqlite3": "^12.6.2",
-    "body-parser": "^1.20.2",
-    "csv-stringify": "^6.4.5",
-    "express": "^4.18.2",
-    "ical-generator": "^6.0.0"
-  },
-  "devDependencies": {
-    "electron": "^30.0.0",
-    "electron-builder": "^24.13.3"
-  },
-  "build": {
-    "appId": "com.schedule.manager",
-    "productName": "Ultimate Scheduler",
-    "directories": {
-      "output": "dist"
-    },
-    "win": {
-      "target": [
-        "nsis",
-        "portable"
-      ]
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true
-    },
-    "portable": {
-      "artifactName": "UltimateScheduler_Portable.exe"
-    }
+    "start": "npx serve ."
   }
 }

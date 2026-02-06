@@ -7,34 +7,27 @@ let isPainting = false;
 let requests = []; // [{date: 'YYYY-MM-DD', type: 'work'|'off'}]
 let schedule = []; // [{date, shift_name, status}]
 
-const api = {
-    get: (url) => fetch(url).then(r => { if(r.status === 401) window.location.href = '/login.html'; return r.json(); }),
-    post: (url, data) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then(r => r.json())
+// Use global API router instead of fetch
+const apiWrapper = {
+    get: (url) => window.api.request('GET', url).then(r => { if(r.error) throw new Error(r.error); return r; }),
+    post: (url, data) => window.api.request('POST', url, data).then(r => { if(r.error) throw new Error(r.error); return r; })
 };
 
-document.addEventListener('DOMContentLoaded', async () => {
-    // Check Auth
-    const authData = await api.get('/api/me');
-    if (!authData.user) return; // Redirect handled in api.get
-    currentUser = authData.user;
-    document.getElementById('welcome-msg').textContent = `Welcome, ${currentUser.username}`;
-    if (currentUser.token) {
-        document.getElementById('ical-link').href = `/api/schedule/feed/${currentUser.token}.ics`;
-    } else {
-        document.getElementById('ical-link').style.display = 'none';
-    }
+// Hook up variables
+window.currentUser = null;
 
-    // Logout
-    document.getElementById('logout-btn').addEventListener('click', async () => {
-        await api.post('/api/logout');
-        window.location.href = '/login.html';
-    });
+// Re-implement the startup logic as a function called by initApp
+window.initDashboard = async () => {
+    // Check Auth
+    const authData = await apiWrapper.get('/api/me');
+    currentUser = authData.user;
 
     // Load Sites
-    const siteData = await api.get('/api/sites');
+    const siteData = await apiWrapper.get('/api/sites');
     if (siteData.sites) {
         sites = siteData.sites;
         const siteSelect = document.getElementById('site-select');
+        siteSelect.innerHTML = '';
         sites.forEach(s => {
             const opt = document.createElement('option');
             opt.value = s.id;
@@ -53,7 +46,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Calendar Controls
     setupCalendarControls();
-});
+};
 
 function setupCalendarControls() {
     document.getElementById('prev-month-btn').addEventListener('click', () => {
@@ -107,21 +100,21 @@ function getViewMode() {
     return document.querySelector('input[name="mode"]:checked').value;
 }
 
-async function loadData() {
+window.loadData = async function() {
     if (!currentSiteId) return;
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth() + 1;
 
     // Load Requests
-    const reqData = await api.get(`/api/requests?siteId=${currentSiteId}&month=${month}&year=${year}`);
+    const reqData = await apiWrapper.get(`/api/requests?siteId=${currentSiteId}&month=${month}&year=${year}`);
     requests = reqData.requests || [];
 
     // Load Schedule
-    const schedData = await api.get(`/api/schedule?siteId=${currentSiteId}&month=${month}&year=${year}`);
+    const schedData = await apiWrapper.get(`/api/schedule?siteId=${currentSiteId}&month=${month}&year=${year}`);
     schedule = schedData.schedule || [];
 
     renderCalendar();
-}
+};
 
 function renderCalendar() {
     const grid = document.getElementById('calendar');
@@ -198,12 +191,12 @@ async function submitRequests() {
     const month = currentDate.getMonth() + 1;
 
     const payload = requests.map(r => r);
-    const res = await api.post('/api/requests', {
+    const res = await apiWrapper.post('/api/requests', {
         siteId: currentSiteId,
         requests: payload,
         month,
         year
     });
     alert(res.message);
-    loadData(); // Reload to sync
+    window.loadData();
 }
