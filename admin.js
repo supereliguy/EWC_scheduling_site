@@ -809,7 +809,7 @@ function renderScheduleShiftsDatesView(container, params, assignments, requests,
     let html = '<div style="overflow-x:auto;"><table class="table table-bordered mb-0" style="min-width: 100%; text-align: center;">';
 
     // Header: Shift, Date 1, Date 2...
-    html += '<thead><tr><th style="min-width: 150px; left: 0; z-index: 20; position: sticky; background: #fff;">Shift</th>';
+    html += '<thead><tr><th style="min-width: 150px; left: 0; z-index: 20; position: sticky;">Shift</th>';
     for(let i=0; i<daysCount; i++) {
         const date = new Date(startObj);
         date.setDate(startObj.getDate() + i);
