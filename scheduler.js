@@ -13,9 +13,10 @@ const isNightShift = (shift) => {
 };
 
 // We attach to window so it can be called by api-router
-window.generateSchedule = async ({ siteId, startDate, days, force }) => {
+const generateSchedule = async ({ siteId, startDate, days, force }) => {
     // Access global db wrapper
-    const db = window.db;
+    // Check if window.db exists, otherwise use global db (for testing if mocked globally)
+    const db = (typeof window !== 'undefined' && window.db) ? window.db : global.db;
 
     // Parse start date from string YYYY-MM-DD to local Date
     const [y, m, d] = startDate.split('-').map(Number);
@@ -458,3 +459,18 @@ const runGreedy = ({ siteId, startObj, days, shifts, users, userSettings, reques
 
     return { assignments, score: totalScore, conflictReport };
 };
+
+if (typeof window !== 'undefined') {
+    window.generateSchedule = generateSchedule;
+}
+
+if (typeof module !== 'undefined') {
+    module.exports = {
+        generateSchedule,
+        checkConstraints,
+        calculateScore,
+        runGreedy,
+        isNightShift,
+        toDateStr
+    };
+}
