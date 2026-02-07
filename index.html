@@ -280,10 +280,13 @@
                 </div>
                 <div class="modal-body">
                     <div class="row mb-3">
-                         <div class="col-md-4">
+                        <div class="col-md-3">
+                            <select id="req-site-select" class="form-select" onchange="updateReqCalendar()"></select>
+                        </div>
+                         <div class="col-md-3">
                             <input type="month" id="req-calendar-month" class="form-control" onchange="updateReqCalendar()">
                         </div>
-                        <div class="col-md-8 text-end">
+                        <div class="col-md-6 text-end">
                             <div class="btn-group">
                                 <button id="req-work-btn" class="btn btn-outline-success">Prefer Work</button>
                                 <button id="req-off-btn" class="btn btn-outline-danger">Request Off</button>

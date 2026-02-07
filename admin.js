@@ -125,7 +125,7 @@ window.saveGlobalSettings = async () => {
 let reqCalendarWidget = null;
 let currentReqUserId = null;
 
-window.openRequestsModal = () => {
+window.openRequestsModal = async () => {
     const userId = document.getElementById('settings-user-id').value;
     const user = users.find(u => u.id == userId);
     if (!user) return;
@@ -136,6 +136,21 @@ window.openRequestsModal = () => {
     // Default to current month
     const today = new Date();
     document.getElementById('req-calendar-month').value = `${today.getFullYear()}-${(today.getMonth()+1).toString().padStart(2, '0')}`;
+
+    // Load User Sites
+    const sitesData = await apiClient.get(`/api/users/${userId}/sites`);
+    const sites = sitesData.sites || [];
+    const select = document.getElementById('req-site-select');
+    select.innerHTML = '';
+
+    if (sites.length === 0) {
+        alert('This user is not assigned to any sites. Please assign them to a site first.');
+        return;
+    }
+
+    sites.forEach(s => {
+        select.innerHTML += `<option value="${s.id}">${s.name}</option>`;
+    });
 
     // Initialize Widget if needed
     if (!reqCalendarWidget) {
@@ -164,40 +179,11 @@ window.updateReqCalendar = async () => {
     if (!currentReqUserId) return;
 
     const monthVal = document.getElementById('req-calendar-month').value;
-    if (!monthVal) return;
+    const siteId = document.getElementById('req-site-select').value;
+
+    if (!monthVal || !siteId) return;
 
     const [year, month] = monthVal.split('-').map(Number);
-
-    // Load requests for this user/month
-    // We need siteId... Requests are per site.
-    // Issue: Users can belong to multiple sites. Requests are tied to sites in DB: `requests(site_id, user_id, ...)`
-    // Admin needs to select which site they are editing requests for?
-    // OR we default to the first site they are in?
-    // OR we pass siteId from the context if we came from "Site Users"?
-    // But we came from global "Users" list.
-
-    // Solution: For now, let's assume we edit requests for ALL sites or pick one.
-    // The DB requires site_id.
-    // Let's add a site selector in the modal or auto-pick.
-    // Let's auto-pick the first site found for user, or prompt.
-    // Better: Fetch user sites.
-
-    const userSitesData = await apiClient.get('/api/sites'); // We need to check membership...
-    // Actually, `site_users` table links them.
-    // Let's just pick the "Current Site" if we are in Site Dashboard context?
-    // But we might be in the global Users list.
-
-    // Hack: Just use the first site in the system for now, or assume Single Site usage which is common.
-    // The prompt implies "Add sites...".
-    // Let's default to adminSites[0] if available.
-
-    const siteId = adminSites.length > 0 ? adminSites[0].id : null;
-    if (!siteId) {
-        alert('Please create a site first.');
-        return;
-    }
-
-    // Ideally we should have a dropdown in the requests modal to pick the site.
 
     const reqData = await apiClient.get(`/api/requests?siteId=${siteId}&month=${month}&year=${year}`);
     // Filter for this user (api returns all for site/month)
@@ -211,22 +197,19 @@ window.saveUserRequests = async () => {
     if (!currentReqUserId) return;
     const monthVal = document.getElementById('req-calendar-month').value;
     const [year, month] = monthVal.split('-').map(Number);
-    const siteId = adminSites.length > 0 ? adminSites[0].id : null; // Fallback
+    const siteId = document.getElementById('req-site-select').value;
 
     if(!siteId) return;
 
-    const requests = reqCalendarWidget.requests; // These are ALL requests painted, including potential old ones if widget wasn't cleared properly?
-    // CalendarWidget.setData replaces requests. So it's fine.
-
-    // API expects: { siteId, requests: [...], month, year }
-    // It deletes existing for that user/month/site and inserts new.
+    const requests = reqCalendarWidget.requests;
 
     try {
         await apiClient.post('/api/requests', {
             siteId,
             requests,
             month,
-            year
+            year,
+            userId: currentReqUserId
         });
         alert('Requests saved');
     } catch(e) {

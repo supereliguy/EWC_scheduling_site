@@ -85,6 +85,16 @@ api.get('/api/me', (req, res) => {
 api.post('/api/logout', (req, res) => res.json({ message: 'Logged out' }));
 
 // Users
+api.get('/api/users/:userId/sites', (req, res) => {
+    const sites = window.db.prepare(`
+        SELECT s.id, s.name
+        FROM sites s
+        JOIN site_users su ON s.id = su.site_id
+        WHERE su.user_id = ?
+    `).all(req.params.userId);
+    res.json({ sites });
+});
+
 api.get('/api/users', (req, res) => {
     const users = window.db.prepare('SELECT * FROM users').all();
     res.json({ users });
@@ -315,9 +325,11 @@ api.get('/api/requests', (req, res) => {
 });
 
 api.post('/api/requests', (req, res) => {
-    const { siteId, requests, month, year } = req.body;
-    // Current user is admin (id 1)
-    const userId = 1;
+    const { siteId, requests, month, year, userId } = req.body;
+    // Validate userId
+    if (!userId) {
+        return res.status(400).json({ error: 'Missing userId' });
+    }
 
     window.db.transaction(() => {
         requests.forEach(r => {
