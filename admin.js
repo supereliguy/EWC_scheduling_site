@@ -594,31 +594,52 @@ function renderScheduleTimelineView(container, params, assignments, requests, sh
     const startObj = new Date(y, m-1, d);
     const daysCount = parseInt(params.days);
 
+    // Pre-process Data for O(1) Lookup
+    const assignmentsMap = {};
+    assignments.forEach(a => {
+        if (!assignmentsMap[a.user_id]) assignmentsMap[a.user_id] = {};
+        if (!assignmentsMap[a.user_id][a.date]) assignmentsMap[a.user_id][a.date] = a;
+    });
+
+    const requestsMap = {};
+    requests.forEach(r => {
+        if (r.type === 'off') {
+            if (!requestsMap[r.user_id]) requestsMap[r.user_id] = {};
+            if (!requestsMap[r.user_id][r.date]) requestsMap[r.user_id][r.date] = r;
+        }
+    });
+
+    // Pre-calculate Date Strings
+    const dateInfos = [];
+    for(let i=0; i<daysCount; i++) {
+        const date = new Date(startObj);
+        date.setDate(startObj.getDate() + i);
+        const dateStr = `${date.getFullYear()}-${(date.getMonth()+1).toString().padStart(2,'0')}-${date.getDate().toString().padStart(2,'0')}`;
+        const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
+        const dayNum = date.getDate();
+        const monthNum = date.getMonth() + 1;
+        dateInfos.push({ dateStr, dayName, dayNum, monthNum });
+    }
+
     let html = '<div style="overflow-x:auto;"><table class="table table-bordered mb-0" style="min-width: 100%; text-align: center; border-collapse: separate; border-spacing: 0;">';
 
     // Header Row
     html += '<thead><tr><th style="min-width: 150px; left: 0; z-index: 20;">User</th>';
-    for(let i=0; i<daysCount; i++) {
-        const date = new Date(startObj);
-        date.setDate(startObj.getDate() + i);
-        const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
-        const dayNum = date.getDate();
-        const monthNum = date.getMonth() + 1;
-        html += `<th style="min-width: 90px;">${monthNum}/${dayNum}<br><small class="text-secondary">${dayName}</small></th>`;
-    }
+    dateInfos.forEach(info => {
+        html += `<th style="min-width: 90px;">${info.monthNum}/${info.dayNum}<br><small class="text-secondary">${info.dayName}</small></th>`;
+    });
     html += '</tr></thead><tbody>';
 
     // User Rows
     users.forEach(u => {
         html += `<tr><td style="position: sticky; left: 0; background: #161b22; z-index: 10; font-weight: bold; border-right: 2px solid #30363d;">${u.username}</td>`;
-        for(let i=0; i<daysCount; i++) {
-            const date = new Date(startObj);
-            date.setDate(startObj.getDate() + i);
-            const dateStr = `${date.getFullYear()}-${(date.getMonth()+1).toString().padStart(2,'0')}-${date.getDate().toString().padStart(2,'0')}`;
 
-            // Find existing assignment or request
-            const assign = assignments.find(a => a.user_id === u.id && a.date === dateStr);
-            const request = requests.find(r => r.user_id === u.id && r.date === dateStr && r.type === 'off');
+        dateInfos.forEach(info => {
+            const dateStr = info.dateStr;
+
+            // Find existing assignment or request (O(1))
+            const assign = assignmentsMap[u.id]?.[dateStr];
+            const request = requestsMap[u.id]?.[dateStr];
 
             let currentShiftId = '';
             let isLocked = false;
@@ -649,7 +670,7 @@ function renderScheduleTimelineView(container, params, assignments, requests, sh
             });
             html += `</select>`;
             html += `</td>`;
-        }
+        });
         html += '</tr>';
     });
 
