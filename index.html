@@ -74,6 +74,7 @@
                             <option value="admin">Admin</option>
                         </select>
                         <button class="btn btn-primary" id="create-user-btn">Create</button>
+                        <button class="btn btn-secondary ms-2" onclick="openBulkModal('users')">Bulk Add</button>
                     </div>
                     <table class="table table-bordered" id="users-table">
                         <thead><tr><th>ID</th><th>Username</th><th>Role</th><th>Actions</th></tr></thead>
@@ -87,6 +88,7 @@
                     <div class="input-group mb-3">
                         <input type="text" class="form-control" id="new-site-name" placeholder="Site Name">
                         <button class="btn btn-primary" id="create-site-btn">Create Site</button>
+                        <button class="btn btn-secondary ms-2" onclick="openBulkModal('sites')">Bulk Add</button>
                     </div>
                     <table class="table table-bordered" id="sites-table">
                         <thead><tr><th>ID</th><th>Name</th><th>Actions</th></tr></thead>
@@ -359,6 +361,30 @@
                         <thead><tr><th>Time</th><th>Desc</th><th>Action</th></tr></thead>
                         <tbody></tbody>
                     </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Add Modal -->
+    <div class="modal fade" id="bulkAddModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="bulk-modal-title">Bulk Add</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted" id="bulk-modal-desc">Paste items here, one per line.</p>
+                    <textarea class="form-control mb-3" id="bulk-input-text" rows="10" placeholder="Paste list here..."></textarea>
+
+                    <div id="bulk-results" class="alert alert-info d-none">
+                        <!-- Results will be shown here -->
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" onclick="processBulkAdd()">Process</button>
                 </div>
             </div>
         </div>
