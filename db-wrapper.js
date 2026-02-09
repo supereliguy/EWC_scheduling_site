@@ -3,6 +3,7 @@ class DBWrapper {
     constructor() {
         this.db = null;
         this.inTransaction = false;
+        this.lastIdStmt = null;
     }
 
     async init() {
@@ -182,6 +183,8 @@ class DBWrapper {
 
     async save() {
         const data = this.db.export();
+        // Exporting invalidates all prepared statements
+        this.lastIdStmt = null;
         await this.saveToStorage(data);
     }
 
@@ -238,11 +241,19 @@ class DBWrapper {
             },
             run: (...params) => {
                 stmt.run(params);
-                // Last ID workaround?
-                // SQL.js doesn't give lastInsertRowid easily on stmt.run()
-                // We have to query it.
-                const idRes = this.db.exec("SELECT last_insert_rowid()");
-                const lastId = idRes[0].values[0][0];
+
+                // Optimized lastId retrieval
+                if (!this.lastIdStmt) {
+                    this.lastIdStmt = this.db.prepare("SELECT last_insert_rowid()");
+                }
+                // get() without params binds nothing, steps, returns values, and resets
+                // Explicitly step just in case
+                let lastId = null;
+                if (this.lastIdStmt.step()) {
+                    const row = this.lastIdStmt.get();
+                    lastId = row[0];
+                }
+                this.lastIdStmt.reset();
 
                 // Save after run?
                 // For performance, we might want to manually save, but let's be safe.
