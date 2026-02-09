@@ -650,7 +650,7 @@ function renderConflictReport(report) {
 
     report.forEach(item => {
         let html = `<div class="card mb-2"><div class="card-body py-2">
-            <h6 class="card-title text-danger">${item.date} - ${escapeHTML(item.shiftName)}</h6>`;
+            <h6 class="card-title text-danger">${escapeHTML(item.date)} - ${escapeHTML(item.shiftName)}</h6>`;
 
         if (item.failures) {
             html += `<ul class="small mb-0 text-secondary">`;
