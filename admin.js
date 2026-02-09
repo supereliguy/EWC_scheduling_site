@@ -30,8 +30,8 @@ function renderUsers() {
         tbody.innerHTML += `
             <tr>
                 <td>${u.id}</td>
-                <td>${u.username}</td>
-                <td>${u.role}</td>
+                <td>${escapeHTML(u.username)}</td>
+                <td>${escapeHTML(u.role)}</td>
                 <td>
                     <button onclick="openSettings(${u.id})">Preferences</button>
                     <button onclick="deleteUser(${u.id})">Delete</button>
@@ -106,13 +106,13 @@ window.openSettings = async (id) => {
             });
 
             for (const [siteName, sList] of Object.entries(bySite)) {
-                shiftsDiv.innerHTML += `<h6 class="mt-2 mb-1 small text-primary fw-bold">${siteName}</h6>`;
+                shiftsDiv.innerHTML += `<h6 class="mt-2 mb-1 small text-primary fw-bold">${escapeHTML(siteName)}</h6>`;
                 sList.forEach(sh => {
                     const isChecked = !avail.blocked_shifts.includes(sh.id);
                     shiftsDiv.innerHTML += `
                         <div class="form-check form-check-inline">
                             <input class="form-check-input avail-shift-check" type="checkbox" value="${sh.id}" id="as-${sh.id}" ${isChecked ? 'checked' : ''}>
-                            <label class="form-check-label small" for="as-${sh.id}">${sh.name}</label>
+                            <label class="form-check-label small" for="as-${sh.id}">${escapeHTML(sh.name)}</label>
                         </div>
                     `;
                 });
@@ -224,7 +224,7 @@ window.openRequestsModal = async () => {
     }
 
     sites.forEach(s => {
-        select.innerHTML += `<option value="${s.id}">${s.name}</option>`;
+        select.innerHTML += `<option value="${s.id}">${escapeHTML(s.name)}</option>`;
     });
 
     // Initialize Widget if needed
@@ -329,7 +329,7 @@ function renderSites() {
         tbody.innerHTML += `
             <tr>
                 <td>${s.id}</td>
-                <td><a href="#" onclick="enterSite(${s.id}); return false;" class="fs-5 fw-bold text-decoration-none">${s.name}</a></td>
+                <td><a href="#" onclick="enterSite(${s.id}); return false;" class="fs-5 fw-bold text-decoration-none">${escapeHTML(s.name)}</a></td>
                 <td>
                     <button class="btn btn-success fw-bold px-3" onclick="enterSite(${s.id})">Enter Dashboard</button>
                     <button class="btn btn-sm btn-secondary ms-2" onclick="openSiteUsersModal(${s.id})">Users</button>
@@ -359,7 +359,7 @@ window.openSiteUsersModal = async (siteId) => {
             <div class="form-check">
                 <input class="form-check-input site-user-checkbox" type="checkbox" value="${u.id}" id="su-${u.id}" ${checked}>
                 <label class="form-check-label" for="su-${u.id}">
-                    ${u.username} (${u.role})
+                    ${escapeHTML(u.username)} (${escapeHTML(u.role)})
                 </label>
             </div>
         `;
@@ -477,7 +477,7 @@ function updateSiteSelects() {
     if(shiftSel) {
         shiftSel.innerHTML = '<option value="">Select Site</option>';
         adminSites.forEach(s => {
-            shiftSel.innerHTML += `<option value="${s.id}">${s.name}</option>`;
+            shiftSel.innerHTML += `<option value="${s.id}">${escapeHTML(s.name)}</option>`;
         });
     }
 }
@@ -522,7 +522,7 @@ function renderShifts() {
         }
         tbody.innerHTML += `
             <tr>
-                <td>${s.name} <br><small class="text-secondary">${dayStr}</small></td>
+                <td>${escapeHTML(s.name)} <br><small class="text-secondary">${dayStr}</small></td>
                 <td>${s.start_time} - ${s.end_time}</td>
                 <td>${s.required_staff}</td>
                 <td><button class="btn btn-sm btn-danger" onclick="deleteShift(${s.id})">Delete</button></td>
@@ -631,16 +631,16 @@ function renderConflictReport(report) {
 
     report.forEach(item => {
         let html = `<div class="card mb-2"><div class="card-body py-2">
-            <h6 class="card-title text-danger">${item.date} - ${item.shiftName}</h6>`;
+            <h6 class="card-title text-danger">${item.date} - ${escapeHTML(item.shiftName)}</h6>`;
 
         if (item.failures) {
             html += `<ul class="small mb-0 text-secondary">`;
             item.failures.forEach(f => {
-                html += `<li><strong>${f.username}:</strong> ${f.reason}</li>`;
+                html += `<li><strong>${escapeHTML(f.username)}:</strong> ${escapeHTML(f.reason)}</li>`;
             });
             html += `</ul>`;
         } else if (item.reason) {
-            html += `<p class="mb-0 text-danger small">${item.reason} ${item.username ? '('+item.username+')' : ''}</p>`;
+            html += `<p class="mb-0 text-danger small">${escapeHTML(item.reason)} ${item.username ? '('+escapeHTML(item.username)+')' : ''}</p>`;
         }
 
         html += `</div></div>`;
@@ -704,7 +704,7 @@ function renderScheduleTimelineView(container, params, assignments, requests, sh
 
     // User Rows
     users.forEach(u => {
-        html += `<tr><td style="position: sticky; left: 0; background: #161b22; z-index: 10; font-weight: bold; border-right: 2px solid #30363d;">${u.username}</td>`;
+        html += `<tr><td style="position: sticky; left: 0; background: #161b22; z-index: 10; font-weight: bold; border-right: 2px solid #30363d;">${escapeHTML(u.username)}</td>`;
         for(let i=0; i<daysCount; i++) {
             const date = new Date(startObj);
             date.setDate(startObj.getDate() + i);
@@ -741,7 +741,7 @@ function renderScheduleTimelineView(container, params, assignments, requests, sh
                 const validDays = (s.days_of_week || '0,1,2,3,4,5,6').split(',').map(Number);
                 if (!validDays.includes(date.getDay())) return;
                 const selected = currentShiftId === s.id ? 'selected' : '';
-                html += `<option value="${s.id}" ${selected}>${s.name}</option>`;
+                html += `<option value="${s.id}" ${selected}>${escapeHTML(s.name)}</option>`;
             });
             html += `</select>`;
             html += `</td>`;
@@ -763,7 +763,7 @@ function renderScheduleDatesShiftsView(container, params, assignments, requests,
     // Header: Date, Shift 1, Shift 2...
     html += '<thead><tr><th style="min-width: 120px;">Date</th>';
     shifts.forEach(s => {
-        html += `<th>${s.name} <small class="text-secondary d-block">Req: ${s.required_staff}</small></th>`;
+        html += `<th>${escapeHTML(s.name)} <small class="text-secondary d-block">Req: ${s.required_staff}</small></th>`;
     });
     html += '</tr></thead><tbody>';
 
@@ -802,7 +802,7 @@ function renderScheduleDatesShiftsView(container, params, assignments, requests,
                 html += `<option value="">-</option>`;
                 users.forEach(u => {
                     const selected = u.id === currentUserId ? 'selected' : '';
-                    html += `<option value="${u.id}" ${selected}>${u.username}</option>`;
+                    html += `<option value="${u.id}" ${selected}>${escapeHTML(u.username)}</option>`;
                 });
                 html += `</select>`;
             }
@@ -834,7 +834,7 @@ function renderScheduleShiftsDatesView(container, params, assignments, requests,
 
     // Rows: Shifts
     shifts.forEach(s => {
-        html += `<tr><td style="position: sticky; left: 0; background: #161b22; z-index: 10; font-weight: bold; border-right: 2px solid #30363d;">${s.name} <br><small class="text-secondary">Req: ${s.required_staff}</small></td>`;
+        html += `<tr><td style="position: sticky; left: 0; background: #161b22; z-index: 10; font-weight: bold; border-right: 2px solid #30363d;">${escapeHTML(s.name)} <br><small class="text-secondary">Req: ${s.required_staff}</small></td>`;
 
         for(let i=0; i<daysCount; i++) {
             const date = new Date(startObj);
@@ -861,7 +861,7 @@ function renderScheduleShiftsDatesView(container, params, assignments, requests,
                 html += `<option value="">-</option>`;
                 users.forEach(u => {
                     const selected = u.id === currentUserId ? 'selected' : '';
-                    html += `<option value="${u.id}" ${selected}>${u.username}</option>`;
+                    html += `<option value="${u.id}" ${selected}>${escapeHTML(u.username)}</option>`;
                 });
                 html += `</select>`;
             }
@@ -948,8 +948,9 @@ function renderScheduleCalendarView(container, params, assignments, requests, sh
             if(assignedUsers.length > 0) {
                 const isNight = s.name.toLowerCase().includes('night');
                 const badgeClass = isNight ? 'shift-badge night' : 'shift-badge';
-                html += `<div class="${badgeClass}" title="${s.name}: ${assignedUsers.join(', ')}">
-                    <strong>${s.name}:</strong> ${assignedUsers.join(', ')}
+                const userList = assignedUsers.map(u => escapeHTML(u)).join(', ');
+                html += `<div class="${badgeClass}" title="${escapeHTML(s.name)}: ${userList}">
+                    <strong>${escapeHTML(s.name)}:</strong> ${userList}
                 </div>`;
             }
         });
@@ -970,12 +971,12 @@ function renderSiteUsersList(users) {
     list.innerHTML = `<table class="table"><thead><tr><th>User</th><th>Role</th><th>Category</th></tr></thead><tbody>
         ${users.map(u => `
             <tr>
-                <td>${u.username}</td>
-                <td>${u.role}</td>
+                <td>${escapeHTML(u.username)}</td>
+                <td>${escapeHTML(u.role)}</td>
                 <td>
                     <select class="form-select form-select-sm" onchange="updateUserCategory(${u.id}, this.value)">
                         <option value="">None</option>
-                        ${categories.map(c => `<option value="${c.id}" ${u.category_id === c.id ? 'selected' : ''}>${c.name}</option>`).join('')}
+                        ${categories.map(c => `<option value="${c.id}" ${u.category_id === c.id ? 'selected' : ''}>${escapeHTML(c.name)}</option>`).join('')}
                     </select>
                 </td>
             </tr>`).join('')}
@@ -1023,7 +1024,7 @@ function renderStats(users, assignments, shifts) {
         });
 
         html += `<tr>
-            <td>${u.username}</td>
+            <td>${escapeHTML(u.username)}</td>
             <td>${totalShifts}</td>
             <td>${totalHours.toFixed(1)}</td>
             <td>${weekends}</td>
@@ -1106,8 +1107,8 @@ function renderCategories() {
         tbody.innerHTML += `
             <tr>
                 <td>${c.priority}</td>
-                <td><span class="badge" style="background-color: ${c.color}; color: #000; border: 1px solid #ccc;">${c.name}</span></td>
-                <td><div style="width: 20px; height: 20px; background-color: ${c.color}; border: 1px solid #ccc;"></div></td>
+                <td><span class="badge" style="background-color: ${escapeHTML(c.color)}; color: #000; border: 1px solid #ccc;">${escapeHTML(c.name)}</span></td>
+                <td><div style="width: 20px; height: 20px; background-color: ${escapeHTML(c.color)}; border: 1px solid #ccc;"></div></td>
                 <td>
                     <button class="btn btn-sm btn-primary" onclick="openCategoryModal(${c.id})">Edit</button>
                     <button class="btn btn-sm btn-danger" onclick="deleteCategory(${c.id})">Delete</button>
