@@ -27,17 +27,36 @@ function renderUsers() {
     const tbody = document.querySelector('#users-table tbody');
     tbody.innerHTML = '';
     users.forEach(u => {
-        tbody.innerHTML += `
-            <tr>
-                <td>${u.id}</td>
-                <td>${escapeHTML(u.username)}</td>
-                <td>${escapeHTML(u.role)}</td>
-                <td>
-                    <button onclick="openSettings(${u.id})">Preferences</button>
-                    <button onclick="deleteUser(${u.id})">Delete</button>
-                </td>
-            </tr>
-        `;
+        const tr = document.createElement('tr');
+
+        const tdId = document.createElement('td');
+        tdId.textContent = u.id;
+        tr.appendChild(tdId);
+
+        const tdName = document.createElement('td');
+        tdName.textContent = u.username;
+        tr.appendChild(tdName);
+
+        const tdRole = document.createElement('td');
+        tdRole.textContent = u.role;
+        tr.appendChild(tdRole);
+
+        const tdActions = document.createElement('td');
+
+        const btnPref = document.createElement('button');
+        btnPref.textContent = 'Preferences';
+        btnPref.onclick = () => window.openSettings(u.id);
+        tdActions.appendChild(btnPref);
+
+        tdActions.appendChild(document.createTextNode(' '));
+
+        const btnDel = document.createElement('button');
+        btnDel.textContent = 'Delete';
+        btnDel.onclick = () => window.deleteUser(u.id);
+        tdActions.appendChild(btnDel);
+
+        tr.appendChild(tdActions);
+        tbody.appendChild(tr);
     });
 }
 
