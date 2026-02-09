@@ -498,6 +498,7 @@ const runGreedy = ({
 
 if (typeof window !== 'undefined') {
     window.generateSchedule = generateSchedule;
+    window.toDateStr = toDateStr;
 }
 
 if (typeof module !== 'undefined') {
