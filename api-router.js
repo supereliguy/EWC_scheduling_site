@@ -264,9 +264,8 @@ api.get('/api/schedule', (req, res) => {
         const start = new Date(startDate);
         const end = new Date(start);
         end.setDate(start.getDate() + parseInt(days) - 1);
-        // Helper to format YYYY-MM-DD
-        const toDateStr = (d) => `${d.getFullYear()}-${(d.getMonth()+1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
-        endStr = toDateStr(end);
+        // Use shared helper
+        endStr = window.toDateStr(end);
     } else if (month && year) {
         startStr = `${year}-${month.toString().padStart(2, '0')}-01`;
         endStr = `${year}-${month.toString().padStart(2, '0')}-31`;
