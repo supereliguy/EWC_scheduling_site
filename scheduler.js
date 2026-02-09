@@ -234,7 +234,26 @@ const calculateScore = (u, shift, dateObj, state, settings, req) => {
     return score;
 };
 
-const runGreedy = ({ siteId, startObj, days, shifts, users, userSettings, requests, prevAssignments, lockedAssignments, forceMode }) => {
+const runGreedy = ({
+    siteId,
+    startObj,
+    days,
+    shifts: _shifts = [],
+    users: _users = [],
+    userSettings: _userSettings = {},
+    requests: _requests = [],
+    prevAssignments: _prevAssignments = [],
+    lockedAssignments: _lockedAssignments = [],
+    forceMode = false
+} = {}) => {
+    // Ensure inputs are valid arrays/objects (handle null which default params don't catch)
+    const shifts = _shifts || [];
+    const users = _users || [];
+    const userSettings = _userSettings || {};
+    const requests = _requests || [];
+    const prevAssignments = _prevAssignments || [];
+    const lockedAssignments = _lockedAssignments || [];
+
     let assignments = [...lockedAssignments.map(a => ({
         date: a.date,
         shiftId: a.shift_id,
