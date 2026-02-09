@@ -1041,9 +1041,6 @@ window.updateAssignment = async (siteId, date, userId, shiftId) => {
     try {
         await apiClient.put('/api/schedule/assignment', { siteId, date, userId, shiftId });
         // Optional: specific UI feedback, currently just reliance on persistence
-        // Could reload schedule or just mark cell as locked visually (add border)
-        // But reloading is safest to sync state.
-        // loadSchedule(); // Reloading full table might be jarring.
     } catch(e) {
         alert('Error updating assignment: ' + e.message);
     }
