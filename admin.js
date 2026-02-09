@@ -1165,3 +1165,83 @@ window.updateUserCategory = async (userId, catId) => {
         // Optional feedback
     } catch(e) { alert(e.message); }
 };
+
+// Helper for XSS prevention
+function escapeHTML(str) {
+    if (!str) return '';
+    return str.replace(/[&<>'"]/g,
+        tag => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            "'": '&#39;',
+            '"': '&quot;'
+        }[tag]));
+}
+
+// Bulk Add Logic
+let currentBulkType = null;
+
+window.openBulkModal = (type) => {
+    currentBulkType = type;
+    const title = type === 'users' ? 'Bulk Add Users' : 'Bulk Add Sites';
+    const desc = type === 'users' ? 'Paste usernames (e.g. "john_doe" or "john_doe|admin"), one per line.' : 'Paste site names, one per line.';
+
+    document.getElementById('bulk-modal-title').textContent = title;
+    document.getElementById('bulk-modal-desc').textContent = desc;
+    document.getElementById('bulk-input-text').value = '';
+    document.getElementById('bulk-results').classList.add('d-none');
+
+    new bootstrap.Modal(document.getElementById('bulkAddModal')).show();
+};
+
+window.processBulkAdd = async () => {
+    const text = document.getElementById('bulk-input-text').value;
+    if(!text.trim()) return;
+
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+    if(lines.length === 0) return;
+
+    let body = {};
+    let url = '';
+
+    if (currentBulkType === 'users') {
+        url = '/api/users/bulk';
+        const users = lines.map(l => {
+            const parts = l.split('|');
+            return { username: parts[0].trim(), role: (parts[1] || 'user').trim().toLowerCase() };
+        });
+        body = { users };
+    } else {
+        url = '/api/sites/bulk';
+        const sites = lines.map(l => ({ name: l }));
+        body = { sites };
+    }
+
+    try {
+        const res = await apiClient.post(url, body);
+
+        // Show results
+        const resultEl = document.getElementById('bulk-results');
+        resultEl.classList.remove('d-none', 'alert-info', 'alert-success', 'alert-warning');
+
+        let html = `<strong>Processed ${lines.length} items.</strong><br>`;
+        if (res.added.length > 0) html += `<span class="text-success">Successfully added: ${res.added.length}</span><br>`;
+        if (res.failed.length > 0) {
+            html += `<span class="text-danger">Failed: ${res.failed.length}</span>`;
+            html += `<ul class="mb-0 small">`;
+            res.failed.forEach(f => html += `<li>${escapeHTML(f.item)}: ${escapeHTML(f.reason)}</li>`);
+            html += `</ul>`;
+        }
+
+        resultEl.innerHTML = html;
+        resultEl.classList.add(res.failed.length > 0 ? 'alert-warning' : 'alert-success');
+
+        // Refresh Lists
+        if (currentBulkType === 'users') loadUsers();
+        else loadSites();
+
+    } catch(e) {
+        alert('Error: ' + e.message);
+    }
+};

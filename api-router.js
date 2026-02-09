@@ -106,6 +106,37 @@ api.post('/api/users', (req, res) => {
         res.json({ message: 'User created', id: result.lastInsertRowid });
     } catch(e) { res.status(500).json({error: e.message}); }
 });
+api.post('/api/users/bulk', (req, res) => {
+    const { users } = req.body; // Array of {username, role}
+    const added = [];
+    const failed = [];
+
+    window.db.transaction(() => {
+        const checkStmt = window.db.prepare('SELECT 1 FROM users WHERE username = ?');
+        const insertStmt = window.db.prepare('INSERT INTO users (username, role) VALUES (?, ?)');
+
+        users.forEach(u => {
+            const { username, role } = u;
+            if(!username) {
+                failed.push({ item: '(empty)', reason: 'Missing username' });
+                return;
+            }
+
+            const exists = checkStmt.get(username);
+            if(exists) {
+                failed.push({ item: username, reason: 'Already exists' });
+            } else {
+                try {
+                    insertStmt.run(username, role || 'user');
+                    added.push(username);
+                } catch(e) {
+                    failed.push({ item: username, reason: e.message });
+                }
+            }
+        });
+    })();
+    res.json({ added, failed });
+});
 api.delete('/api/users/:id', (req, res) => {
     window.db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
     res.json({ message: 'User deleted' });
@@ -166,6 +197,39 @@ api.post('/api/sites', (req, res) => {
     // Link admin to site automatically so they show up in schedule
     window.db.prepare('INSERT INTO site_users (site_id, user_id) VALUES (?, 1)').run(result.lastInsertRowid);
     res.json({ message: 'Site created', id: result.lastInsertRowid });
+});
+api.post('/api/sites/bulk', (req, res) => {
+    const { sites } = req.body; // Array of {name}
+    const added = [];
+    const failed = [];
+
+    window.db.transaction(() => {
+        const checkStmt = window.db.prepare('SELECT 1 FROM sites WHERE name = ?');
+        const insertStmt = window.db.prepare('INSERT INTO sites (name, description) VALUES (?, "")');
+        const linkStmt = window.db.prepare('INSERT INTO site_users (site_id, user_id) VALUES (?, 1)'); // Link admin
+
+        sites.forEach(s => {
+            const name = s.name;
+            if(!name) {
+                failed.push({ item: '(empty)', reason: 'Missing site name' });
+                return;
+            }
+
+            const exists = checkStmt.get(name);
+            if(exists) {
+                failed.push({ item: name, reason: 'Already exists' });
+            } else {
+                try {
+                    const result = insertStmt.run(name);
+                    linkStmt.run(result.lastInsertRowid);
+                    added.push(name);
+                } catch(e) {
+                    failed.push({ item: name, reason: e.message });
+                }
+            }
+        });
+    })();
+    res.json({ added, failed });
 });
 api.delete('/api/sites/:id', (req, res) => {
     window.db.prepare('DELETE FROM sites WHERE id = ?').run(req.params.id);
