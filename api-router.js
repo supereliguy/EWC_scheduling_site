@@ -434,3 +434,7 @@ api.post('/api/snapshots/:id/restore', (req, res) => {
 });
 
 window.api = api;
+
+if (typeof module !== 'undefined') {
+    module.exports = api;
+}
