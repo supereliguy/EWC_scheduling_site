@@ -1081,7 +1081,7 @@ window.loadSnapshots = async () => {
             tbody.innerHTML += `
                 <tr>
                     <td>${new Date(s.created_at).toLocaleString()}</td>
-                    <td>${s.description}</td>
+                    <td>${escapeHTML(s.description)}</td>
                     <td><button class="btn btn-sm btn-warning" onclick="restoreSnapshot(${s.id})">Restore</button></td>
                 </tr>
             `;
