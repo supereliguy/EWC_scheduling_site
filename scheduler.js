@@ -7,9 +7,11 @@ const toDateStr = (d) => {
 const isNightShift = (shift) => {
     // Heuristic: If it crosses midnight (end < start) OR starts very late (e.g. > 20:00)
     if (!shift) return false;
+    if (shift.isNight !== undefined) return shift.isNight;
     const s = parseInt(shift.start_time.split(':')[0]);
     const e = parseInt(shift.end_time.split(':')[0]);
-    return e < s || s >= 20;
+    shift.isNight = e < s || s >= 20;
+    return shift.isNight;
 };
 
 // We attach to window so it can be called by api-router
