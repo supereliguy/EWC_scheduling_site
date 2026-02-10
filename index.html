@@ -437,11 +437,21 @@
             const arrayBuffer = await file.arrayBuffer();
             const u8 = new Uint8Array(arrayBuffer);
 
-            // Re-init DB
-            window.db.db = new window.SQL.Database(u8);
-            await window.db.save();
-            alert('Database imported! Reloading...');
-            location.reload();
+            try {
+                // Validate before loading
+                window.db.validateImport(u8);
+
+                // Re-init DB
+                window.db.db = new window.SQL.Database(u8);
+                await window.db.save();
+                alert('Database imported successfully! Reloading...');
+                location.reload();
+            } catch (e) {
+                console.error(e);
+                alert('Import Failed: ' + e.message);
+                // Clear input
+                input.value = '';
+            }
         };
 
         window.resetDB = async () => {
