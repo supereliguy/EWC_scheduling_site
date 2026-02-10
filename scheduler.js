@@ -113,6 +113,13 @@ const generateSchedule = async ({ siteId, startDate, days, force }) => {
         WHERE site_id = ? AND date BETWEEN ? AND ?
     `).all(siteId, toDateStr(startObj), toDateStr(endObj));
 
+    // Optimization: Pre-index requests by date and user_id for O(1) lookup
+    const requestsMap = requests.reduce((map, r) => {
+        if (!map[r.date]) map[r.date] = {};
+        if (!map[r.date][r.user_id]) map[r.date][r.user_id] = r;
+        return map;
+    }, {});
+
     // 2. Algorithm: Randomized Greedy with Restarts
     const ITERATIONS = force ? 1 : 100;
     const MAX_TIME_MS = 3000;
@@ -127,6 +134,7 @@ const generateSchedule = async ({ siteId, startDate, days, force }) => {
         const result = runGreedy({
             siteId, startObj, days,
             shifts, users, userSettings, requests,
+            requestsMap, // Pass optimized map
             prevAssignments, lockedAssignments,
             forceMode: !!force
         });
@@ -261,6 +269,7 @@ const runGreedy = ({
     users: _users = [],
     userSettings: _userSettings = {},
     requests: _requests = [],
+    requestsMap: _requestsMap = null,
     prevAssignments: _prevAssignments = [],
     lockedAssignments: _lockedAssignments = [],
     forceMode = false
@@ -272,6 +281,13 @@ const runGreedy = ({
     const requests = _requests || [];
     const prevAssignments = _prevAssignments || [];
     const lockedAssignments = _lockedAssignments || [];
+
+    // Optimization: Use provided map or build it
+    const requestsMap = _requestsMap || requests.reduce((map, r) => {
+        if (!map[r.date]) map[r.date] = {};
+        if (!map[r.date][r.user_id]) map[r.date][r.user_id] = r;
+        return map;
+    }, {});
 
     let assignments = [...lockedAssignments.map(a => ({
         date: a.date,
@@ -393,7 +409,7 @@ const runGreedy = ({
                 if (assignedToday.has(u.id)) return;
                 const state = userState[u.id];
                 const settings = userSettings[u.id];
-                const req = requests.find(r => r.user_id === u.id && r.date === dateStr);
+                const req = requestsMap[dateStr] ? requestsMap[dateStr][u.id] : undefined;
 
                 const check = checkConstraints(u, shift, dateStr, dateObj, state, settings, req);
                 if (check.valid) {
@@ -425,7 +441,7 @@ const runGreedy = ({
                     const sacrificeCandidates = users.filter(u => !assignedToday.has(u.id)).map(u => {
                         const state = userState[u.id];
                         const settings = userSettings[u.id];
-                        const req = requests.find(r => r.user_id === u.id && r.date === dateStr);
+                        const req = requestsMap[dateStr] ? requestsMap[dateStr][u.id] : undefined;
 
                         // Calculate Violation Severity?
                         // For now, we just want to know WHY they failed to report it
@@ -488,7 +504,7 @@ const runGreedy = ({
                     const failures = users.filter(u => !assignedToday.has(u.id)).map(u => {
                          const state = userState[u.id];
                          const settings = userSettings[u.id];
-                         const req = requests.find(r => r.user_id === u.id && r.date === dateStr);
+                         const req = requestsMap[dateStr] ? requestsMap[dateStr][u.id] : undefined;
                          const check = checkConstraints(u, shift, dateStr, dateObj, state, settings, req);
                          return { username: u.username, reason: check.reason };
                     });
