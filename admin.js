@@ -648,13 +648,19 @@ document.getElementById('create-shift-btn').addEventListener('click', async () =
     const name = document.getElementById('new-shift-name').value;
     const start_time = document.getElementById('new-shift-start').value;
     const end_time = document.getElementById('new-shift-end').value;
-    const required_staff = document.getElementById('new-shift-staff').value;
+    let required_staff = document.getElementById('new-shift-staff').value;
+    if (!required_staff) required_staff = 1;
 
     const days_of_week = Array.from(document.querySelectorAll('.shift-day-check:checked')).map(c => c.value).join(',');
 
     if (siteId && name) {
-        await apiClient.post(`/api/sites/${siteId}/shifts`, { name, start_time, end_time, required_staff, days_of_week });
-        loadShifts(siteId);
+        try {
+            await apiClient.post(`/api/sites/${siteId}/shifts`, { name, start_time, end_time, required_staff, days_of_week });
+            loadShifts(siteId);
+        } catch (e) {
+            console.error("Error creating shift:", e);
+            alert("Failed to create shift: " + e.message);
+        }
     } else {
         alert('Select site and enter shift name');
     }
