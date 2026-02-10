@@ -4,6 +4,7 @@ class DBWrapper {
         this.db = null;
         this.inTransaction = false;
         this.lastIdStmt = null;
+        this.saveTimer = null;
     }
 
     async init() {
@@ -182,6 +183,16 @@ class DBWrapper {
 
     // --- Persistence ---
 
+    scheduleSave() {
+        if (this.saveTimer) {
+            clearTimeout(this.saveTimer);
+        }
+        this.saveTimer = setTimeout(() => {
+            this.save();
+            this.saveTimer = null;
+        }, 500); // 500ms debounce
+    }
+
     async save() {
         const data = this.db.export();
         // Exporting invalidates all prepared statements
@@ -322,7 +333,7 @@ class DBWrapper {
                 // We'll call save() manually in the API router for now, or debounce it.
                 // For strict safety:
                 if (!this.inTransaction) {
-                    this.save();
+                    this.scheduleSave();
                 }
 
                 return { lastInsertRowid: lastId, changes: this.db.getRowsModified() };
@@ -346,7 +357,7 @@ class DBWrapper {
                 const result = fn(...args);
                 this.db.exec("COMMIT");
                 this.inTransaction = false;
-                this.save();
+                this.scheduleSave();
                 return result;
             } catch (e) {
                 this.db.exec("ROLLBACK");
