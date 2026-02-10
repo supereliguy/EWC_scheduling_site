@@ -494,9 +494,17 @@ window.switchScheduleView = (mode) => {
 function updateSiteSelects() {
     const shiftSel = document.getElementById('shift-site-select');
     if(shiftSel) {
-        shiftSel.innerHTML = '<option value="">Select Site</option>';
+        shiftSel.innerHTML = '';
+        const defaultOpt = document.createElement('option');
+        defaultOpt.value = '';
+        defaultOpt.textContent = 'Select Site';
+        shiftSel.appendChild(defaultOpt);
+
         adminSites.forEach(s => {
-            shiftSel.innerHTML += `<option value="${s.id}">${escapeHTML(s.name)}</option>`;
+            const opt = document.createElement('option');
+            opt.value = s.id;
+            opt.textContent = s.name;
+            shiftSel.appendChild(opt);
         });
     }
 }
