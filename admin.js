@@ -654,12 +654,16 @@ const getScheduleParams = () => ({
     days: document.getElementById('schedule-days').value
 });
 
-document.getElementById('generate-schedule-btn').addEventListener('click', () => runScheduleGeneration(false));
+document.getElementById('generate-schedule-btn').addEventListener('click', () => runScheduleGeneration(true));
 
+// Legacy Force Handler (can be removed if modal is never shown)
 window.forceGenerateSchedule = () => {
     // Hide modal
-    const modal = bootstrap.Modal.getInstance(document.getElementById('conflictModal'));
-    modal.hide();
+    const modalEl = document.getElementById('conflictModal');
+    if(modalEl) {
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        if(modal) modal.hide();
+    }
     runScheduleGeneration(true);
 };
 
@@ -668,8 +672,8 @@ async function runScheduleGeneration(force) {
     if(!params.siteId) return alert('Select site');
     if(!params.startDate) return alert('Select start date');
 
-    // Add force param
-    params.force = force;
+    // Always Force by default for new workflow
+    params.force = true;
 
     const iterInput = document.getElementById('schedule-iterations');
     params.iterations = iterInput ? iterInput.value : 100;
@@ -699,47 +703,25 @@ async function runScheduleGeneration(force) {
     try {
         const res = await apiClient.post('/api/schedule/generate', params);
 
-        // Check for conflicts/failure
-        if (res.conflictReport && res.conflictReport.length > 0) {
-            if (force) {
-                 if(progressBar) {
-                     progressBar.style.width = '100%';
-                     progressBar.classList.remove('bg-info');
-                     progressBar.classList.add('bg-warning');
-                 }
-                 alert(`Schedule generated with ${res.conflictReport.length} rule violations (Hits). See stats for details.`);
-                 loadSchedule();
-            } else {
-                 // Strict mode failed
-                 renderConflictReport(res.conflictReport);
-                 new bootstrap.Modal(document.getElementById('conflictModal')).show();
-                 statusEl.classList.add('d-none');
-                 statusEl.classList.remove('d-flex');
-                 btn.disabled = false;
-                 return; // Stop here
-            }
-        } else {
-             // Clean success
-             if(progressBar) {
-                 progressBar.style.width = '100%';
-                 progressBar.classList.remove('bg-info');
-                 progressBar.classList.add('bg-success');
-             }
-             setTimeout(() => {
-                 statusEl.classList.add('d-none');
-                 statusEl.classList.remove('d-flex');
-             }, 2000);
-             loadSchedule();
+        if(progressBar) {
+             progressBar.style.width = '100%';
+             progressBar.classList.remove('bg-info');
+             progressBar.classList.add('bg-success');
         }
+
+        setTimeout(() => {
+             statusEl.classList.add('d-none');
+             statusEl.classList.remove('d-flex');
+        }, 2000);
+
+        loadSchedule();
 
     } catch (e) {
         alert(e.message);
         statusEl.classList.add('d-none');
         statusEl.classList.remove('d-flex');
     } finally {
-        if (!document.querySelector('#conflictModal.show')) {
-            btn.disabled = false;
-        }
+        btn.disabled = false;
     }
 }
 
@@ -798,6 +780,83 @@ async function loadSchedule() {
     // Update Other Tabs
     renderSiteUsersList(siteUsers);
     renderStats(siteUsers, assignments, shifts);
+
+    // Update Health Panel
+    analyzeScheduleHealth(assignments, siteUsers, params);
+}
+
+function analyzeScheduleHealth(assignments, users, params) {
+    if (!window.validateSchedule) return;
+
+    try {
+        const report = window.validateSchedule({
+            siteId: parseInt(params.siteId),
+            startDate: params.startDate,
+            days: parseInt(params.days),
+            assignments: assignments
+        });
+        renderHealthPanel(report, users);
+    } catch (e) {
+        console.error("Health Check Failed:", e);
+    }
+}
+
+function renderHealthPanel(report, users) {
+    const container = document.getElementById('schedule-health-panel');
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    // Create Flex Container
+    const wrapper = document.createElement('div');
+    wrapper.className = 'd-flex flex-wrap gap-2 p-2 border rounded bg-white shadow-sm align-items-center';
+
+    wrapper.innerHTML = '<span class="fw-bold text-secondary me-2 small">Health:</span>';
+
+    // Sort users: Error first, then Warning, then OK
+    const sortedUsers = [...users].sort((a, b) => {
+        const sa = report[a.id]?.status || 'ok';
+        const sb = report[b.id]?.status || 'ok';
+        const scores = { error: 0, warning: 1, ok: 2 };
+        if (scores[sa] !== scores[sb]) return scores[sa] - scores[sb];
+        return a.username.localeCompare(b.username);
+    });
+
+    sortedUsers.forEach(u => {
+        const r = report[u.id] || { status: 'ok', issues: [] };
+
+        const badge = document.createElement('div');
+        badge.className = 'badge d-flex align-items-center gap-1';
+        badge.style.cursor = 'help';
+        badge.style.color = '#000';
+        badge.style.border = '1px solid #ddd';
+
+        let icon = '✅';
+        let bg = '#e6fffa'; // Light Green
+        let tooltipText = 'All Constraints Met';
+
+        if (r.status === 'error') {
+            icon = '❌';
+            bg = '#ffe6e6'; // Light Red
+            tooltipText = r.issues.map(i => `${i.date}: ${i.reason} (${i.shift})`).join('\n');
+        } else if (r.status === 'warning') {
+            icon = '⚠️'; // Yellow Exclamation
+            bg = '#fffbe6'; // Light Yellow
+            tooltipText = r.issues.map(i => `${i.date}: ${i.reason} (${i.shift})`).join('\n');
+        }
+
+        badge.style.backgroundColor = bg;
+        badge.innerHTML = `<span style="font-size: 1.1em;">${icon}</span> <span>${escapeHTML(u.username)}</span>`;
+        badge.title = tooltipText;
+
+        // Initialize Bootstrap Tooltip
+        new bootstrap.Tooltip(badge);
+
+        wrapper.appendChild(badge);
+    });
+
+    container.appendChild(wrapper);
+    container.classList.remove('d-none');
 }
 
 function renderScheduleTimelineView(container, params, assignments, requests, shifts, users) {
