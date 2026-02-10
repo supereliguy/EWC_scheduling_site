@@ -39,7 +39,7 @@ const generateSchedule = async ({ siteId, startDate, days, force }) => {
     contextStart.setDate(contextStart.getDate() - 6);
 
     const prevAssignments = db.prepare(`
-        SELECT a.*, s.name as shift_name, s.start_time, s.end_time
+        SELECT a.*, s.name as shift_name, s.start_time, s.end_time, s.is_weekend
         FROM assignments a
         JOIN shifts s ON a.shift_id = s.id
         WHERE a.site_id = ? AND a.date BETWEEN ? AND ?
@@ -47,7 +47,7 @@ const generateSchedule = async ({ siteId, startDate, days, force }) => {
 
     // Locked Assignments for Target Period
     const lockedAssignments = db.prepare(`
-        SELECT a.*, s.name as shift_name, s.start_time, s.end_time
+        SELECT a.*, s.name as shift_name, s.start_time, s.end_time, s.is_weekend
         FROM assignments a
         JOIN shifts s ON a.shift_id = s.id
         WHERE a.site_id = ? AND a.date BETWEEN ? AND ? AND a.is_locked = 1
@@ -208,6 +208,12 @@ const checkConstraints = (u, shift, dateStr, dateObj, state, settings, req) => {
          return { valid: false, reason: 'Availability (Shift Blocked)' };
     }
 
+    // 0.2 Max Variance (Hard Constraint)
+    const maxShifts = (settings.target_shifts || 0) + (settings.target_variance || 0);
+    if (state.totalAssigned >= maxShifts) {
+        return { valid: false, reason: `Max Shifts Exceeded (${maxShifts})` };
+    }
+
     // 1. Max Consecutive
     if (state.consecutive + 1 > settings.max_consecutive) return { valid: false, reason: `Max Consecutive Shifts (${settings.max_consecutive})` };
 
@@ -256,6 +262,11 @@ const calculateScore = (u, shift, dateObj, state, settings, req) => {
     // 7. Min Days Off
     if (state.daysOff > 0 && state.daysOff < settings.min_days_off) {
             score -= 2000;
+    }
+
+    // 8. Weekend Fairness
+    if (shift.is_weekend) {
+        score -= (state.weekendShifts * 500);
     }
 
     return score;
@@ -345,7 +356,8 @@ const runGreedy = ({
             totalAssigned: 0,
             hits: 0,
             currentBlockShiftId: lastShift ? lastShift.shift_id : null,
-            currentBlockSize: consecutive
+            currentBlockSize: consecutive,
+            weekendShifts: 0
         };
     });
 
@@ -353,6 +365,8 @@ const runGreedy = ({
         const s = userState[uId];
         if (isWorked) {
             s.totalAssigned++;
+            if (shift.is_weekend) s.weekendShifts++;
+
             if (s.daysOff === 0) s.consecutive++;
             else s.consecutive = 1;
             s.daysOff = 0;
@@ -456,9 +470,18 @@ const runGreedy = ({
                     });
 
                     // Sort for Sacrifice:
-                    // 1. Highest Priority Number (Lowest Importance) -> Descending
-                    // 2. Fewest Hits -> Ascending
+                    // 1. Violation Type: Soft (False) before Hard (True)
+                    // 2. Highest Priority Number (Lowest Importance) -> Descending
+                    // 3. Fewest Hits -> Ascending
+                    const isHardConstraint = (r) => {
+                        return r.includes('Availability') || r.includes('Max Shifts') || r.includes('Requested Off');
+                    };
+
                     sacrificeCandidates.sort((a, b) => {
+                        const aHard = isHardConstraint(a.failReason);
+                        const bHard = isHardConstraint(b.failReason);
+                        if (aHard !== bHard) return aHard ? 1 : -1; // Soft first
+
                         if (a.priority !== b.priority) return b.priority - a.priority; // 10 before 1
                         return a.hits - b.hits; // 0 hits before 5 hits
                     });

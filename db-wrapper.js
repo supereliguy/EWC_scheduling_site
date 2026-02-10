@@ -164,6 +164,20 @@ class DBWrapper {
             console.error("Migration error (days_of_week):", e);
         }
 
+        // Migration: Add is_weekend to shifts if missing
+        try {
+            const result = this.db.exec("PRAGMA table_info(shifts)");
+            if (result.length > 0) {
+                const cols = result[0].values;
+                const hasWeekend = cols.some(c => c[1] === 'is_weekend');
+                if (!hasWeekend) {
+                    this.db.run("ALTER TABLE shifts ADD COLUMN is_weekend INTEGER DEFAULT 0");
+                }
+            }
+        } catch(e) {
+            console.error("Migration error (is_weekend):", e);
+        }
+
         // Seed Global Settings
         const globalCount = this.db.exec("SELECT COUNT(*) FROM global_settings")[0].values[0][0];
         if (globalCount === 0) {

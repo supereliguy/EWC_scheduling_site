@@ -71,6 +71,8 @@ window.openSettings = async (id) => {
         document.getElementById('setting-max-consecutive').value = s.max_consecutive_shifts;
         document.getElementById('setting-min-days-off').value = s.min_days_off;
         document.getElementById('setting-target-shifts').value = s.target_shifts || 8;
+        document.getElementById('setting-variance').value = s.target_shifts_variance || 2;
+        document.getElementById('setting-block-size').value = s.preferred_block_size || 3;
 
         // Shift Ranking
         let ranking = [];
@@ -169,8 +171,8 @@ window.saveSettings = async () => {
         min_days_off: document.getElementById('setting-min-days-off').value,
         target_shifts: document.getElementById('setting-target-shifts').value,
         night_preference: 1.0,
-        target_shifts_variance: 2,
-        preferred_block_size: 3,
+        target_shifts_variance: document.getElementById('setting-variance').value,
+        preferred_block_size: document.getElementById('setting-block-size').value,
         shift_ranking: JSON.stringify(ranking),
         availability_rules: JSON.stringify(availability_rules)
     };
@@ -585,6 +587,12 @@ function renderShifts() {
         const tdName = document.createElement('td');
         const nameSpan = document.createElement('span');
         nameSpan.textContent = s.name;
+        if (s.is_weekend) {
+            const wBadge = document.createElement('span');
+            wBadge.className = 'badge bg-warning text-dark ms-2';
+            wBadge.textContent = 'Weekend';
+            nameSpan.appendChild(wBadge);
+        }
         tdName.appendChild(nameSpan);
         tdName.appendChild(document.createElement('br'));
         const daySmall = document.createElement('small');
@@ -619,11 +627,12 @@ document.getElementById('create-shift-btn').addEventListener('click', async () =
     const start_time = document.getElementById('new-shift-start').value;
     const end_time = document.getElementById('new-shift-end').value;
     const required_staff = document.getElementById('new-shift-staff').value;
+    const is_weekend = document.getElementById('new-shift-weekend').checked;
 
     const days_of_week = Array.from(document.querySelectorAll('.shift-day-check:checked')).map(c => c.value).join(',');
 
     if (siteId && name) {
-        await apiClient.post(`/api/sites/${siteId}/shifts`, { name, start_time, end_time, required_staff, days_of_week });
+        await apiClient.post(`/api/sites/${siteId}/shifts`, { name, start_time, end_time, required_staff, days_of_week, is_weekend });
         loadShifts(siteId);
     } else {
         alert('Select site and enter shift name');

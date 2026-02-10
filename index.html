@@ -109,6 +109,10 @@
                                 <div class="col-md-3"><input type="time" class="form-control" id="new-shift-end" value="16:00"></div>
                                 <div class="col-md-2"><input type="number" class="form-control" id="new-shift-staff" placeholder="Qty" value="1"></div>
                                 <div class="col-12 mt-2">
+                                    <div class="form-check form-check-inline mb-2">
+                                        <input class="form-check-input" type="checkbox" id="new-shift-weekend">
+                                        <label class="form-check-label small fw-bold" for="new-shift-weekend">Is Weekend Shift?</label>
+                                    </div><br>
                                     <label class="form-label small fw-bold mb-1">Active Days:</label><br>
                                     <div class="form-check form-check-inline"><input class="form-check-input shift-day-check" type="checkbox" value="0" checked id="sd-0"><label class="form-check-label small" for="sd-0">Sun</label></div>
                                     <div class="form-check form-check-inline"><input class="form-check-input shift-day-check" type="checkbox" value="1" checked id="sd-1"><label class="form-check-label small" for="sd-1">Mon</label></div>
@@ -268,6 +272,8 @@
                             <div class="mb-2"><label>Max Consecutive</label><input type="number" class="form-control" id="setting-max-consecutive"></div>
                             <div class="mb-2"><label>Min Days Off</label><input type="number" class="form-control" id="setting-min-days-off"></div>
                             <div class="mb-2"><label>Target Shifts</label><input type="number" class="form-control" id="setting-target-shifts"></div>
+                            <div class="mb-2"><label>Max Variance</label><input type="number" class="form-control" id="setting-variance"></div>
+                            <div class="mb-2"><label>Preferred Block Size</label><input type="number" class="form-control" id="setting-block-size"></div>
                         </div>
                         <div class="col-md-6">
                             <h6>Shift Ranking (Drag to reorder - TBD)</h6>
