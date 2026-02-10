@@ -938,14 +938,25 @@ function renderScheduleCalendarView(container, params, assignments, requests, sh
         html += `<div class="calendar-day empty"></div>`;
     }
 
+    // Pre-group assignments by date for O(1) access
+    const assignmentsByDate = {};
+    assignments.forEach(a => {
+        if (!assignmentsByDate[a.date]) assignmentsByDate[a.date] = [];
+        assignmentsByDate[a.date].push(a);
+    });
+
+    // Create user map for O(1) lookup
+    const userMap = new Map();
+    users.forEach(u => userMap.set(u.id, u.username));
+
     // Days
     for(let i=0; i<daysCount; i++) {
         const date = new Date(startObj);
         date.setDate(startObj.getDate() + i);
         const dateStr = `${date.getFullYear()}-${(date.getMonth()+1).toString().padStart(2,'0')}-${date.getDate().toString().padStart(2,'0')}`;
 
-        // Find all assignments for this day
-        const dayAssigns = assignments.filter(a => a.date === dateStr);
+        // Find all assignments for this day (O(1))
+        const dayAssigns = assignmentsByDate[dateStr] || [];
 
         // Group by Shift
         const shiftsOnDay = {};
@@ -953,8 +964,8 @@ function renderScheduleCalendarView(container, params, assignments, requests, sh
 
         dayAssigns.forEach(a => {
             if(shiftsOnDay[a.shift_id]) {
-                const u = users.find(user => user.id === a.user_id);
-                if(u) shiftsOnDay[a.shift_id].push(u.username);
+                const username = userMap.get(a.user_id);
+                if(username) shiftsOnDay[a.shift_id].push(username);
             }
         });
 
