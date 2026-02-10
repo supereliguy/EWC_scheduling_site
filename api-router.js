@@ -265,8 +265,11 @@ api.post('/api/sites/:siteId/shifts', (req, res) => {
     const { name, start_time, end_time, required_staff, days_of_week, is_weekend } = req.body;
     const days = days_of_week || '0,1,2,3,4,5,6';
     const weekend = is_weekend ? 1 : 0;
+    const staff = parseInt(required_staff) || 1;
+    const sId = parseInt(req.params.siteId);
+
     window.db.prepare('INSERT INTO shifts (site_id, name, start_time, end_time, required_staff, days_of_week, is_weekend) VALUES (?,?,?,?,?,?,?)')
-      .run(req.params.siteId, name, start_time, end_time, required_staff, days, weekend);
+      .run(sId, name, start_time, end_time, staff, days, weekend);
     res.json({ message: 'Shift created' });
 });
 api.delete('/api/shifts/:id', (req, res) => {
