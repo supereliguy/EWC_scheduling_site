@@ -345,18 +345,49 @@ function renderSites() {
     const tbody = document.querySelector('#sites-table tbody');
     tbody.innerHTML = '';
     adminSites.forEach(s => {
-        tbody.innerHTML += `
-            <tr>
-                <td>${s.id}</td>
-                <td><a href="#" onclick="enterSite(${s.id}); return false;" class="fs-5 fw-bold text-decoration-none">${escapeHTML(s.name)}</a></td>
-                <td>
-                    <button class="btn btn-success fw-bold px-3" onclick="enterSite(${s.id})">Enter Dashboard</button>
-                    <button class="btn btn-sm btn-secondary ms-2" onclick="openSiteUsersModal(${s.id})">Users</button>
-                    <button class="btn btn-sm btn-info ms-1" onclick="loadShifts(${s.id})">Shifts</button>
-                    <button class="btn btn-sm btn-danger ms-1" onclick="deleteSite(${s.id})">Delete</button>
-                </td>
-            </tr>
-        `;
+        const tr = document.createElement('tr');
+
+        const tdId = document.createElement('td');
+        tdId.textContent = s.id;
+        tr.appendChild(tdId);
+
+        const tdName = document.createElement('td');
+        const aName = document.createElement('a');
+        aName.href = '#';
+        aName.onclick = (e) => { e.preventDefault(); enterSite(s.id); };
+        aName.className = 'fs-5 fw-bold text-decoration-none';
+        aName.textContent = s.name;
+        tdName.appendChild(aName);
+        tr.appendChild(tdName);
+
+        const tdActions = document.createElement('td');
+
+        const btnEnter = document.createElement('button');
+        btnEnter.className = 'btn btn-success fw-bold px-3';
+        btnEnter.onclick = () => enterSite(s.id);
+        btnEnter.textContent = 'Enter Dashboard';
+        tdActions.appendChild(btnEnter);
+
+        const btnUsers = document.createElement('button');
+        btnUsers.className = 'btn btn-sm btn-secondary ms-2';
+        btnUsers.onclick = () => openSiteUsersModal(s.id);
+        btnUsers.textContent = 'Users';
+        tdActions.appendChild(btnUsers);
+
+        const btnShifts = document.createElement('button');
+        btnShifts.className = 'btn btn-sm btn-info ms-1';
+        btnShifts.onclick = () => loadShifts(s.id);
+        btnShifts.textContent = 'Shifts';
+        tdActions.appendChild(btnShifts);
+
+        const btnDelete = document.createElement('button');
+        btnDelete.className = 'btn btn-sm btn-danger ms-1';
+        btnDelete.onclick = () => deleteSite(s.id);
+        btnDelete.textContent = 'Delete';
+        tdActions.appendChild(btnDelete);
+
+        tr.appendChild(tdActions);
+        tbody.appendChild(tr);
     });
 }
 
