@@ -477,7 +477,35 @@ window.enterSite = async (siteId) => {
 
     showSection('site-dashboard-section');
     await loadCategories(siteId); // Load categories first to populate dropdowns
+
+    // Populate Settings
+    document.getElementById('site-weekend-start-day').value = site.weekend_start_day !== undefined ? site.weekend_start_day : 5;
+    document.getElementById('site-weekend-start-time').value = site.weekend_start_time || '21:00';
+    document.getElementById('site-weekend-end-day').value = site.weekend_end_day !== undefined ? site.weekend_end_day : 0;
+    document.getElementById('site-weekend-end-time').value = site.weekend_end_time || '16:00';
+
     loadSchedule();
+};
+
+window.saveSiteSettings = async () => {
+    const siteId = document.getElementById('site-dashboard-section').dataset.siteId;
+    const body = {
+        weekend_start_day: parseInt(document.getElementById('site-weekend-start-day').value),
+        weekend_start_time: document.getElementById('site-weekend-start-time').value,
+        weekend_end_day: parseInt(document.getElementById('site-weekend-end-day').value),
+        weekend_end_time: document.getElementById('site-weekend-end-time').value
+    };
+
+    try {
+        await apiClient.put(`/api/sites/${siteId}`, body);
+        alert('Settings saved. Please regenerate stats/schedule to apply changes.');
+        // Update local adminSites
+        const site = adminSites.find(s => s.id == siteId);
+        if (site) Object.assign(site, body);
+        loadSchedule(); // Refresh stats
+    } catch(e) {
+        alert(e.message);
+    }
 };
 
 window.changeMonth = (delta) => {
@@ -587,12 +615,6 @@ function renderShifts() {
         const tdName = document.createElement('td');
         const nameSpan = document.createElement('span');
         nameSpan.textContent = s.name;
-        if (s.is_weekend) {
-            const wBadge = document.createElement('span');
-            wBadge.className = 'badge bg-warning text-dark ms-2';
-            wBadge.textContent = 'Weekend';
-            nameSpan.appendChild(wBadge);
-        }
         tdName.appendChild(nameSpan);
         tdName.appendChild(document.createElement('br'));
         const daySmall = document.createElement('small');
@@ -627,12 +649,11 @@ document.getElementById('create-shift-btn').addEventListener('click', async () =
     const start_time = document.getElementById('new-shift-start').value;
     const end_time = document.getElementById('new-shift-end').value;
     const required_staff = document.getElementById('new-shift-staff').value;
-    const is_weekend = document.getElementById('new-shift-weekend').checked;
 
     const days_of_week = Array.from(document.querySelectorAll('.shift-day-check:checked')).map(c => c.value).join(',');
 
     if (siteId && name) {
-        await apiClient.post(`/api/sites/${siteId}/shifts`, { name, start_time, end_time, required_staff, days_of_week, is_weekend });
+        await apiClient.post(`/api/sites/${siteId}/shifts`, { name, start_time, end_time, required_staff, days_of_week });
         loadShifts(siteId);
     } else {
         alert('Select site and enter shift name');
@@ -1196,13 +1217,15 @@ function renderStats(users, assignments, shifts) {
             totalHours += (endH - startH);
 
             // Weekend
-            const d = new Date(a.date);
-            const day = d.getDay(); // 0=Sun, 6=Sat
-            // Note: a.date is YYYY-MM-DD. new Date('YYYY-MM-DD') is UTC.
-            // We must parse properly to check local day of week?
-            // Actually, for stats, we can just use new Date(a.date).getUTCDay() if we treat the date string as UTC.
-            // new Date('2023-01-01') -> UTC midnight. getUTCDay() is correct for that date.
-            if (new Date(a.date).getUTCDay() === 0 || new Date(a.date).getUTCDay() === 6) {
+            // Parse date manually to avoid timezone issues with Date()
+            const [y, m, d] = a.date.split('-').map(Number);
+            const dateObj = new Date(y, m - 1, d); // Local time 00:00:00
+
+            // Get current site config
+            const siteId = parseInt(document.getElementById('site-dashboard-section').dataset.siteId);
+            const site = adminSites.find(s => s.id === siteId);
+
+            if (window.isWeekendShift && window.isWeekendShift(dateObj, shift, site)) {
                 weekends++;
             }
 

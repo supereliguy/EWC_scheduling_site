@@ -178,6 +178,23 @@ class DBWrapper {
             console.error("Migration error (is_weekend):", e);
         }
 
+        // Migration: Add weekend config to sites if missing
+        try {
+            const result = this.db.exec("PRAGMA table_info(sites)");
+            if (result.length > 0) {
+                const cols = result[0].values;
+                const hasWeekendStartDay = cols.some(c => c[1] === 'weekend_start_day');
+                if (!hasWeekendStartDay) {
+                    this.db.run("ALTER TABLE sites ADD COLUMN weekend_start_day INTEGER DEFAULT 5"); // Friday
+                    this.db.run("ALTER TABLE sites ADD COLUMN weekend_start_time TEXT DEFAULT '21:00'");
+                    this.db.run("ALTER TABLE sites ADD COLUMN weekend_end_day INTEGER DEFAULT 0"); // Sunday
+                    this.db.run("ALTER TABLE sites ADD COLUMN weekend_end_time TEXT DEFAULT '16:00'");
+                }
+            }
+        } catch(e) {
+            console.error("Migration error (weekend_config):", e);
+        }
+
         // Seed Global Settings
         const globalCount = this.db.exec("SELECT COUNT(*) FROM global_settings")[0].values[0][0];
         if (globalCount === 0) {
