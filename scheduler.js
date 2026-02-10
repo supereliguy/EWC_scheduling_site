@@ -436,6 +436,11 @@ const runGreedy = ({
         const assignedToday = new Set(lockedUserIds);
         const shuffledUsers = [...users].sort(() => Math.random() - 0.5);
 
+        // Randomize the order of slots to fill
+        // This prevents the greedy algorithm from always favoring shifts that appear first in the list,
+        // which can leave harder-to-fill shifts (e.g., specific skill requirements) with no candidates.
+        slotsToFill.sort(() => Math.random() - 0.5);
+
         for (const shift of slotsToFill) {
             const candidates = [];
 
