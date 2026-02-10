@@ -167,6 +167,10 @@
                                         <button type="button" class="btn btn-outline-primary" id="view-shifts-dates-btn" onclick="switchScheduleView('shifts-dates')">By Shift</button>
                                     </div>
                                     <div class="vr mx-2 text-secondary"></div>
+                                    <div class="input-group input-group-sm me-2" style="width: 150px;">
+                                        <span class="input-group-text bg-dark text-white border-secondary">Iter</span>
+                                        <input type="number" class="form-control bg-dark text-white border-secondary" id="schedule-iterations" value="100" min="1" step="10">
+                                    </div>
                                     <button class="btn btn-warning fw-bold text-dark" id="generate-schedule-btn">Auto-Schedule</button>
                                     <button class="btn btn-secondary" onclick="openSnapshotsModal()">History</button>
                                 </div>
@@ -176,9 +180,12 @@
                             <input type="hidden" id="schedule-start-date">
                             <input type="hidden" id="schedule-days">
 
-                            <span id="generation-status" class="d-none fw-bold text-info ms-2">
-                                <span class="spinner-border spinner-border-sm" role="status"></span> Generating...
-                            </span>
+                            <div id="generation-status" class="d-none ms-2 align-items-center mt-2" style="width: 300px;">
+                                <span class="fw-bold text-info me-2 small">Generating...</span>
+                                <div class="progress flex-grow-1" style="height: 10px;">
+                                    <div id="generation-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-info" role="progressbar" style="width: 0%"></div>
+                                </div>
+                            </div>
 
                             <div id="schedule-display" style="min-height: 500px;"></div>
                         </div>
