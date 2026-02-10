@@ -17,6 +17,7 @@ class DBWrapper {
             // Locate the wasm file. We assume it's in the same directory.
             locateFile: file => `./${file}`
         });
+        this.SQL = SQL;
 
         // Try to load from localStorage/IndexedDB
         const savedData = await this.loadFromStorage();
@@ -227,6 +228,65 @@ class DBWrapper {
         });
     }
 
+    // --- Validation ---
+
+    validateImport(u8) {
+        if (!this.SQL) throw new Error("SQL engine not initialized");
+        let tempDB = null;
+        try {
+            tempDB = new this.SQL.Database(u8);
+
+            // 1. Schema Validation
+            const tablesRes = tempDB.exec("SELECT name FROM sqlite_master WHERE type='table'");
+            if (!tablesRes.length) throw new Error("Invalid Database: No tables found");
+            const tables = tablesRes[0].values.flat();
+
+            const requiredTables = ['users', 'sites', 'shifts', 'assignments', 'user_settings'];
+            const missing = requiredTables.filter(t => !tables.includes(t));
+            if (missing.length) throw new Error(`Invalid Database: Missing required tables: ${missing.join(', ')}`);
+
+            // 2. Content Validation (Anti-XSS)
+            // We verify that no text column in key tables contains HTML-like tags (< or >)
+            // This is a strict policy to prevent XSS.
+            const tablesToCheck = ['users', 'sites', 'shifts', 'assignments', 'requests', 'user_categories', 'global_settings', 'snapshots', 'user_settings'];
+            const suspiciousPattern = /[<>]/;
+
+            for (const table of tablesToCheck) {
+                if (!tables.includes(table)) continue;
+
+                // Get text columns
+                const colsRes = tempDB.exec(`PRAGMA table_info(${table})`);
+                if (!colsRes.length) continue;
+
+                const textCols = colsRes[0].values
+                    .filter(c => c[2].toUpperCase().includes('TEXT') || c[2].toUpperCase().includes('CHAR'))
+                    .map(c => c[1]);
+
+                if (!textCols.length) continue;
+
+                // Check content
+                // We select all text columns
+                const rowsRes = tempDB.exec(`SELECT ${textCols.join(', ')} FROM ${table}`);
+                if (!rowsRes.length) continue;
+
+                const rows = rowsRes[0].values;
+                for (let i = 0; i < rows.length; i++) {
+                    const row = rows[i];
+                    for (let j = 0; j < row.length; j++) {
+                        const val = row[j];
+                        if (typeof val === 'string' && suspiciousPattern.test(val)) {
+                            throw new Error(`Security Alert: Malicious content detected in table '${table}', column '${textCols[j]}'. Import rejected.`);
+                        }
+                    }
+                }
+            }
+
+            return true;
+        } finally {
+            if (tempDB) tempDB.close();
+        }
+    }
+
     // --- Better-SQLite3 Polyfill ---
 
     prepare(sql) {
@@ -305,3 +365,7 @@ class DBWrapper {
 const db = new DBWrapper();
 // We attach to window for global access in the browser since we are not using a bundler for everything
 window.db = db;
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { DBWrapper, db };
+}
