@@ -176,7 +176,8 @@ describe('generateSchedule', () => {
 
         // Existing Locked Assignment
         mockData.assignments = [{
-            id: 100, site_id: 1, date: '2023-01-01', shift_id: 1, user_id: 1, is_locked: 1, shift_name: 'Day'
+            id: 100, site_id: 1, date: '2023-01-01', shift_id: 1, user_id: 1, is_locked: 1, shift_name: 'Day',
+            start_time: '08:00', end_time: '16:00'
         }];
 
         // Request Off (normally a conflict)

@@ -6,10 +6,13 @@ const toDateStr = (d) => {
 
 const isNightShift = (shift) => {
     // Heuristic: If it crosses midnight (end < start) OR starts very late (e.g. > 20:00)
+    // Optimized: Checks pre-calculated property first
     if (!shift) return false;
     if (shift.isNight !== undefined) return shift.isNight;
-    const s = parseInt(shift.start_time.split(':')[0]);
-    const e = parseInt(shift.end_time.split(':')[0]);
+    // Safety check for missing properties (e.g. incomplete test mocks or DB errors)
+    if (!shift.start_time || !shift.end_time) return false;
+    const s = parseInt(shift.start_time.split(':')[0], 10);
+    const e = parseInt(shift.end_time.split(':')[0], 10);
     shift.isNight = e < s || s >= 20;
     return shift.isNight;
 };
@@ -51,6 +54,11 @@ const generateSchedule = async ({ siteId, startDate, days, force }) => {
     `).all(siteId, toDateStr(startObj), toDateStr(endObj));
 
     const shifts = db.prepare('SELECT * FROM shifts WHERE site_id = ?').all(siteId);
+
+    // Pre-calculate isNight property to avoid repeated parsing in inner loops
+    shifts.forEach(isNightShift);
+    prevAssignments.forEach(isNightShift);
+    lockedAssignments.forEach(isNightShift);
 
     // Get users for this site only (join with categories)
     const users = db.prepare(`
