@@ -236,6 +236,26 @@ api.delete('/api/sites/:id', (req, res) => {
     res.json({ message: 'Deleted' });
 });
 
+api.put('/api/sites/:id', (req, res) => {
+    const { id } = req.params;
+    const { name, description, weekend_start_day, weekend_start_time, weekend_end_day, weekend_end_time } = req.body;
+
+    // Use COALESCE to keep existing values if not provided (undefined -> null)
+    const stmt = window.db.prepare(`
+        UPDATE sites
+        SET name = COALESCE(?, name),
+            description = COALESCE(?, description),
+            weekend_start_day = COALESCE(?, weekend_start_day),
+            weekend_start_time = COALESCE(?, weekend_start_time),
+            weekend_end_day = COALESCE(?, weekend_end_day),
+            weekend_end_time = COALESCE(?, weekend_end_time)
+        WHERE id = ?
+    `);
+
+    stmt.run(name, description, weekend_start_day, weekend_start_time, weekend_end_day, weekend_end_time, id);
+    res.json({ message: 'Site updated' });
+});
+
 // Shifts
 api.get('/api/sites/:siteId/shifts', (req, res) => {
     const shifts = window.db.prepare('SELECT * FROM shifts WHERE site_id = ?').all(req.params.siteId);

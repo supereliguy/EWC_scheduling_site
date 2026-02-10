@@ -109,10 +109,6 @@
                                 <div class="col-md-3"><input type="time" class="form-control" id="new-shift-end" value="16:00"></div>
                                 <div class="col-md-2"><input type="number" class="form-control" id="new-shift-staff" placeholder="Qty" value="1"></div>
                                 <div class="col-12 mt-2">
-                                    <div class="form-check form-check-inline mb-2">
-                                        <input class="form-check-input" type="checkbox" id="new-shift-weekend">
-                                        <label class="form-check-label small fw-bold" for="new-shift-weekend">Is Weekend Shift?</label>
-                                    </div><br>
                                     <label class="form-label small fw-bold mb-1">Active Days:</label><br>
                                     <div class="form-check form-check-inline"><input class="form-check-input shift-day-check" type="checkbox" value="0" checked id="sd-0"><label class="form-check-label small" for="sd-0">Sun</label></div>
                                     <div class="form-check form-check-inline"><input class="form-check-input shift-day-check" type="checkbox" value="1" checked id="sd-1"><label class="form-check-label small" for="sd-1">Mon</label></div>
@@ -146,6 +142,7 @@
                         <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#sd-users">Users</a></li>
                         <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#sd-categories">Categories</a></li>
                         <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#sd-stats">Stats</a></li>
+                        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#sd-settings">Settings</a></li>
                     </ul>
 
                     <div class="tab-content">
@@ -215,6 +212,54 @@
                         <div class="tab-pane fade" id="sd-stats">
                             <h4>Fairness & Stats</h4>
                             <div id="site-stats-display"></div>
+                        </div>
+
+                        <!-- Settings -->
+                        <div class="tab-pane fade" id="sd-settings">
+                            <h4>Site Settings</h4>
+                            <div class="row" style="max-width: 600px;">
+                                <div class="col-12 mb-3">
+                                    <label class="form-label fw-bold">Weekend Definition</label>
+                                    <p class="text-muted small">Define when the weekend starts and ends. Shifts starting within this window are counted as weekend shifts.</p>
+                                    <div class="row g-2">
+                                        <div class="col-md-6">
+                                            <label class="small">Start Day</label>
+                                            <select class="form-select" id="site-weekend-start-day">
+                                                <option value="0">Sunday</option>
+                                                <option value="1">Monday</option>
+                                                <option value="2">Tuesday</option>
+                                                <option value="3">Wednesday</option>
+                                                <option value="4">Thursday</option>
+                                                <option value="5">Friday</option>
+                                                <option value="6">Saturday</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="small">Start Time</label>
+                                            <input type="time" class="form-control" id="site-weekend-start-time">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="small">End Day</label>
+                                            <select class="form-select" id="site-weekend-end-day">
+                                                <option value="0">Sunday</option>
+                                                <option value="1">Monday</option>
+                                                <option value="2">Tuesday</option>
+                                                <option value="3">Wednesday</option>
+                                                <option value="4">Thursday</option>
+                                                <option value="5">Friday</option>
+                                                <option value="6">Saturday</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="small">End Time</label>
+                                            <input type="time" class="form-control" id="site-weekend-end-time">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-12 mt-3">
+                                    <button class="btn btn-primary" onclick="saveSiteSettings()">Save Settings</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

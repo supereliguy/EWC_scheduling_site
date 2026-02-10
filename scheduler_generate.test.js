@@ -22,8 +22,13 @@ describe('generateSchedule', () => {
             // Helper to return mock result with both .all() and .run() to handle flexible usage
             const returnResult = (data) => ({
                 all: jest.fn().mockReturnValue(data || []),
+                get: jest.fn().mockReturnValue((data && data.length > 0) ? data[0] : null),
                 run: jest.fn()
             });
+
+            if (q.includes('FROM sites')) {
+                return returnResult([{ id: 1 }]); // Default Site
+            }
 
             if (q.includes('FROM shifts')) {
                 return returnResult(mockData.shifts);

@@ -27,13 +27,20 @@ describe('validateSchedule', () => {
             availability_rules: JSON.stringify({ blocked_shifts: [10], blocked_days: [] })
         }];
 
+        // Assignments provided to validate
         const assignments = [{ date: '2023-01-01', shiftId: 10, userId: 1, isLocked: false }];
 
         mockDB.prepare.mockImplementation((query) => {
-            if (query.includes('FROM users')) return { all: () => users };
-            if (query.includes('FROM shifts')) return { all: () => shifts };
-            if (query.includes('FROM user_settings')) return { all: () => userSettings };
-            return { all: () => [] };
+            const ret = {
+                all: () => [],
+                get: () => ({ id: 1 }) // Default site
+            };
+
+            if (query.includes('FROM users')) ret.all = () => users;
+            if (query.includes('FROM shifts')) ret.all = () => shifts;
+            if (query.includes('FROM user_settings')) ret.all = () => userSettings;
+
+            return ret;
         });
 
         const report = scheduler.validateSchedule({ siteId, startDate, days, assignments });
@@ -58,24 +65,29 @@ describe('validateSchedule', () => {
         }];
 
         mockDB.prepare.mockImplementation((query) => {
+            const ret = {
+                all: () => [],
+                get: () => ({ id: 1 })
+            };
+
             if (query.includes('FROM assignments a')) {
-                return {
-                    all: jest.fn((sid, start, end) => {
-                        // Check if this is the context query (ending before start date)
-                        if (end === '2023-01-02') {
-                            return [
-                                { date: '2023-01-01', shift_id: 10, user_id: 1 },
-                                { date: '2023-01-02', shift_id: 10, user_id: 1 }
-                            ];
-                        }
-                        return [];
-                    })
+                // Context query for previous assignments
+                ret.all = (sid, start, end) => {
+                    // Check if this is the context query (ending before start date)
+                    if (end === '2023-01-02') {
+                        return [
+                            { date: '2023-01-01', shift_id: 10, user_id: 1 },
+                            { date: '2023-01-02', shift_id: 10, user_id: 1 }
+                        ];
+                    }
+                    return [];
                 };
             }
-            if (query.includes('FROM users')) return { all: () => users };
-            if (query.includes('FROM shifts')) return { all: () => shifts };
-            if (query.includes('FROM user_settings')) return { all: () => userSettings };
-            return { all: () => [] };
+            if (query.includes('FROM users')) ret.all = () => users;
+            if (query.includes('FROM shifts')) ret.all = () => shifts;
+            if (query.includes('FROM user_settings')) ret.all = () => userSettings;
+
+            return ret;
         });
 
         const assignments = [{ date: '2023-01-03', shiftId: 10, userId: 1 }];
@@ -94,13 +106,17 @@ describe('validateSchedule', () => {
         const startDate = '2023-01-01';
         const days = 1;
 
-        const users = [{ id: 1, username: 'User1' }];
-        const shifts = [{ id: 10, name: 'Day', days_of_week: '0,1,2,3,4,5,6' }];
+        const users = [{ id: 1, username: 'User1', role: 'user', category_priority: 10 }];
+        const shifts = [{ id: 10, name: 'Day', start_time: '08:00', end_time: '16:00', required_staff: 1, days_of_week: '0,1,2,3,4,5,6' }];
 
         mockDB.prepare.mockImplementation((query) => {
-            if (query.includes('FROM users')) return { all: () => users };
-            if (query.includes('FROM shifts')) return { all: () => shifts };
-            return { all: () => [] };
+            const ret = {
+                all: () => [],
+                get: () => ({ id: 1 })
+            };
+            if (query.includes('FROM users')) ret.all = () => users;
+            if (query.includes('FROM shifts')) ret.all = () => shifts;
+            return ret;
         });
 
         const assignments = [{ date: '2023-01-01', shiftId: 10, userId: 1 }];
