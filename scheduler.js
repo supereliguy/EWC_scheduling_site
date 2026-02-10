@@ -114,12 +114,14 @@ const generateSchedule = async ({ siteId, startDate, days, force }) => {
     `).all(siteId, toDateStr(startObj), toDateStr(endObj));
 
     // 2. Algorithm: Randomized Greedy with Restarts
-    const ITERATIONS = force ? 1 : 100; // If forcing, just do one run? Or maybe still try a few to optimize 'hits'? Let's do fewer for force to avoid heavy compute if it's struggling.
-    // Actually, if force is true, we WANT to find the path of least resistance (fewest hits). So iterations are still good.
-    // But if force is false, we fail fast? No, we try to find a valid one.
+    const ITERATIONS = force ? 1 : 100;
+    const MAX_TIME_MS = 3000;
+    const MAX_STAGNANT_ITERATIONS = 20;
 
     let bestResult = null;
     let bestScore = -Infinity;
+    let stagnantIterations = 0;
+    const startTime = Date.now();
 
     for (let i = 0; i < ITERATIONS; i++) {
         const result = runGreedy({
@@ -132,7 +134,14 @@ const generateSchedule = async ({ siteId, startDate, days, force }) => {
         if (result.score > bestScore) {
             bestScore = result.score;
             bestResult = result;
+            stagnantIterations = 0;
+        } else {
+            stagnantIterations++;
         }
+
+        // Optimization: Stop if taking too long or not improving
+        if (Date.now() - startTime > MAX_TIME_MS) break;
+        if (stagnantIterations >= MAX_STAGNANT_ITERATIONS) break;
     }
 
     if (!bestResult) {
