@@ -17,20 +17,16 @@ const isNightShift = (shift) => {
     return shift.isNight;
 };
 
-// We attach to window so it can be called by api-router
-const generateSchedule = async ({ siteId, startDate, days, force, iterations, onProgress }) => {
-    // Access global db wrapper
-    // Check if window.db exists, otherwise use global db (for testing if mocked globally)
+// Reusable data fetching context
+const fetchScheduleContext = ({ siteId, startDate, days }) => {
     const db = (typeof window !== 'undefined' && window.db) ? window.db : global.db;
 
-    // Parse start date from string YYYY-MM-DD to local Date
+    // Parse start date
     const [y, m, d] = startDate.split('-').map(Number);
     const startObj = new Date(y, m - 1, d);
 
     const endObj = new Date(startObj);
     endObj.setDate(startObj.getDate() + days - 1);
-
-    // 1. Fetch Data
 
     // Previous Context (last 7 days before start)
     const contextEnd = new Date(startObj);
@@ -53,14 +49,23 @@ const generateSchedule = async ({ siteId, startDate, days, force, iterations, on
         WHERE a.site_id = ? AND a.date BETWEEN ? AND ? AND a.is_locked = 1
     `).all(siteId, toDateStr(startObj), toDateStr(endObj));
 
+    // All current assignments (for validation)
+    const currentAssignments = db.prepare(`
+        SELECT a.*, s.name as shift_name, s.start_time, s.end_time, s.is_weekend
+        FROM assignments a
+        JOIN shifts s ON a.shift_id = s.id
+        WHERE a.site_id = ? AND a.date BETWEEN ? AND ?
+    `).all(siteId, toDateStr(startObj), toDateStr(endObj));
+
     const shifts = db.prepare('SELECT * FROM shifts WHERE site_id = ?').all(siteId);
 
-    // Pre-calculate isNight property to avoid repeated parsing in inner loops
+    // Pre-calculate isNight
     shifts.forEach(isNightShift);
     prevAssignments.forEach(isNightShift);
     lockedAssignments.forEach(isNightShift);
+    currentAssignments.forEach(isNightShift);
 
-    // Get users for this site only (join with categories)
+    // Users
     const users = db.prepare(`
         SELECT u.id, u.username, u.role,
                COALESCE(cat.priority, 10) as category_priority,
@@ -71,10 +76,8 @@ const generateSchedule = async ({ siteId, startDate, days, force, iterations, on
         WHERE su.site_id = ?
     `).all(siteId);
 
-    // Fetch settings
+    // Settings
     const settingsRows = db.prepare('SELECT * FROM user_settings').all();
-
-    // Fetch Global Settings
     const globalRows = db.prepare('SELECT * FROM global_settings').all();
     const globalSettings = {};
     globalRows.forEach(r => globalSettings[r.key] = r.value);
@@ -113,16 +116,28 @@ const generateSchedule = async ({ siteId, startDate, days, force, iterations, on
         WHERE site_id = ? AND date BETWEEN ? AND ?
     `).all(siteId, toDateStr(startObj), toDateStr(endObj));
 
-    // Optimization: Pre-index requests by date and user_id for O(1) lookup
     const requestsMap = requests.reduce((map, r) => {
         if (!map[r.date]) map[r.date] = {};
         if (!map[r.date][r.user_id]) map[r.date][r.user_id] = r;
         return map;
     }, {});
 
+    return {
+        startObj, endObj,
+        shifts, users, userSettings, requests, requestsMap,
+        prevAssignments, lockedAssignments, currentAssignments
+    };
+};
+
+// We attach to window so it can be called by api-router
+const generateSchedule = async ({ siteId, startDate, days, force, iterations, onProgress }) => {
+    // Access global db wrapper
+    const db = (typeof window !== 'undefined' && window.db) ? window.db : global.db;
+
+    const ctx = fetchScheduleContext({ siteId, startDate, days });
+
     // 2. Algorithm: Randomized Greedy with Restarts
     const maxIterations = iterations ? parseInt(iterations) : (force ? 1 : 100);
-    // Increase time limit if user requested more iterations
     const MAX_TIME_MS = iterations ? (iterations * 100) : 3000;
     const MAX_STAGNANT_ITERATIONS = iterations ? Math.ceil(iterations / 2) : 20;
 
@@ -139,10 +154,14 @@ const generateSchedule = async ({ siteId, startDate, days, force, iterations, on
         }
 
         const result = runGreedy({
-            siteId, startObj, days,
-            shifts, users, userSettings, requests,
-            requestsMap, // Pass optimized map
-            prevAssignments, lockedAssignments,
+            siteId, startObj: ctx.startObj, days,
+            shifts: ctx.shifts,
+            users: ctx.users,
+            userSettings: ctx.userSettings,
+            requests: ctx.requests,
+            requestsMap: ctx.requestsMap,
+            prevAssignments: ctx.prevAssignments,
+            lockedAssignments: ctx.lockedAssignments,
             forceMode: !!force
         });
 
@@ -168,24 +187,15 @@ const generateSchedule = async ({ siteId, startDate, days, force, iterations, on
         throw new Error("Could not generate a schedule.");
     }
 
-    // 3. Save (Only if NOT a dry run? No, we always save, but if it has conflicts, the user might reject it?)
-    // The user flow is: Generate -> See Conflicts -> Force.
-    // So if force is false and we have conflicts, we return them but DO NOT SAVE?
-    // Or we save the partial?
-    // User said: "Stop at the initial fail... give me list of problems... then click proceed".
-    // So we should NOT save if conflicts exist and force is false.
-
-    const hasUnfilled = bestResult.assignments.length < (days * shifts.reduce((acc,s)=>acc+s.required_staff,0)) - (bestResult.conflictReport ? 0 : 0); // Logic check?
-    // Better check: did we fail to fill any slots?
-    // The conflictReport contains failures for unfilled slots.
+    // 3. Save
     const conflicts = bestResult.conflictReport || [];
     const isComplete = conflicts.length === 0;
 
     if (force || isComplete) {
         const transaction = db.transaction(() => {
             // Delete NON-LOCKED assignments for this period
-            const startStr = toDateStr(startObj);
-            const endStr = toDateStr(endObj);
+            const startStr = toDateStr(ctx.startObj);
+            const endStr = toDateStr(ctx.endObj);
             db.prepare('DELETE FROM assignments WHERE site_id = ? AND date BETWEEN ? AND ? AND is_locked = 0')
               .run(siteId, startStr, endStr);
 
@@ -291,6 +301,148 @@ const calculateScore = (u, shift, dateObj, state, settings, req) => {
     }
 
     return score;
+};
+
+const isHardConstraint = (r) => {
+    if(!r) return false;
+    return r.includes('Availability') || r.includes('Max Shifts') || r.includes('Requested Off');
+};
+
+const validateSchedule = ({ siteId, startDate, days, assignments: providedAssignments }) => {
+    // 1. Fetch Context
+    const ctx = fetchScheduleContext({ siteId, startDate, days });
+    const assignments = providedAssignments || ctx.currentAssignments;
+
+    // Report Object
+    const report = {}; // userId -> { status, issues: [] }
+    ctx.users.forEach(u => report[u.id] = { status: 'ok', issues: [] });
+
+    // Initialize User State
+    const userState = {};
+    ctx.users.forEach(u => {
+        // Find last worked day in prevAssignments
+        const myPrev = ctx.prevAssignments.filter(a => a.user_id === u.id).sort((a,b) => new Date(a.date) - new Date(b.date));
+
+        let consecutive = 0;
+        let daysOff = 0;
+        let lastShift = null;
+        let lastDate = null;
+
+        if (myPrev.length > 0) {
+            const last = myPrev[myPrev.length - 1];
+            lastShift = last;
+            lastDate = new Date(last.date);
+            const gap = (ctx.startObj - lastDate) / (1000 * 60 * 60 * 24);
+
+            if (gap <= 1) {
+                daysOff = 0;
+                consecutive = 1; // Simplification
+                // Iterate back for accurate consecutive
+                for(let i = myPrev.length - 2; i >= 0; i--) {
+                    const curr = new Date(myPrev[i].date);
+                    const next = new Date(myPrev[i+1].date);
+                    if ((next - curr) / (1000 * 60 * 60 * 24) === 1) {
+                        consecutive++;
+                    } else { break; }
+                }
+            } else {
+                daysOff = Math.floor(gap) - 1;
+                consecutive = 0;
+            }
+        } else {
+            daysOff = 99;
+        }
+
+        userState[u.id] = {
+            consecutive,
+            daysOff,
+            lastShift,
+            lastDate,
+            totalAssigned: 0,
+            hits: 0,
+            currentBlockShiftId: lastShift ? lastShift.shift_id : null,
+            currentBlockSize: consecutive,
+            weekendShifts: 0
+        };
+    });
+
+    const updateState = (uId, dateObj, shift, isWorked) => {
+        const s = userState[uId];
+        if (isWorked) {
+            s.totalAssigned++;
+            if (shift.is_weekend) s.weekendShifts++;
+
+            if (s.daysOff === 0) s.consecutive++;
+            else s.consecutive = 1;
+            s.daysOff = 0;
+
+            if (s.currentBlockShiftId === shift.id) s.currentBlockSize++;
+            else {
+                s.currentBlockShiftId = shift.id;
+                s.currentBlockSize = 1;
+            }
+            s.lastShift = shift;
+            s.lastDate = dateObj;
+        } else {
+            s.consecutive = 0;
+            s.daysOff++;
+            s.currentBlockSize = 0;
+            s.currentBlockShiftId = null;
+        }
+    };
+
+    // Iterate Days
+    for (let i = 0; i < days; i++) {
+        const dateObj = new Date(ctx.startObj);
+        dateObj.setDate(ctx.startObj.getDate() + i);
+        const dateStr = toDateStr(dateObj);
+
+        // Get assignments for this day
+        const dailyAssigns = assignments.filter(a => a.date === dateStr);
+        const workedUserIds = new Set(dailyAssigns.map(a => a.userId || a.user_id));
+
+        // 1. Check constraints for those working
+        dailyAssigns.forEach(a => {
+            const uId = a.userId || a.user_id;
+            const u = ctx.users.find(u => u.id === uId);
+            if (!u) return;
+
+            const shiftId = a.shiftId || a.shift_id;
+            const shift = ctx.shifts.find(s => s.id === shiftId);
+            if (!shift) return;
+
+            const state = userState[uId];
+            const settings = ctx.userSettings[uId];
+            const req = ctx.requestsMap[dateStr] ? ctx.requestsMap[dateStr][uId] : undefined;
+
+            // Run Check
+            const check = checkConstraints(u, shift, dateStr, dateObj, state, settings, req);
+
+            if (!check.valid) {
+                const type = isHardConstraint(check.reason) ? 'hard' : 'soft';
+                report[uId].issues.push({
+                    date: dateStr,
+                    type,
+                    reason: check.reason,
+                    shift: shift.name
+                });
+                if (type === 'hard') report[uId].status = 'error';
+                else if (report[uId].status !== 'error') report[uId].status = 'warning';
+            }
+
+            // Update State
+            updateState(uId, dateObj, shift, true);
+        });
+
+        // 2. Update state for those not working
+        ctx.users.forEach(u => {
+            if (!workedUserIds.has(u.id)) {
+                updateState(u.id, dateObj, null, false);
+            }
+        });
+    }
+
+    return report;
 };
 
 const runGreedy = ({
@@ -499,10 +651,6 @@ const runGreedy = ({
                     // 1. Violation Type: Soft (False) before Hard (True)
                     // 2. Highest Priority Number (Lowest Importance) -> Descending
                     // 3. Fewest Hits -> Ascending
-                    const isHardConstraint = (r) => {
-                        return r.includes('Availability') || r.includes('Max Shifts') || r.includes('Requested Off');
-                    };
-
                     sacrificeCandidates.sort((a, b) => {
                         const aHard = isHardConstraint(a.failReason);
                         const bHard = isHardConstraint(b.failReason);
@@ -582,16 +730,21 @@ const runGreedy = ({
 
 if (typeof window !== 'undefined') {
     window.generateSchedule = generateSchedule;
+    window.validateSchedule = validateSchedule;
+    window.fetchScheduleContext = fetchScheduleContext;
     window.toDateStr = toDateStr;
 }
 
 if (typeof module !== 'undefined') {
     module.exports = {
         generateSchedule,
+        validateSchedule,
+        fetchScheduleContext,
         checkConstraints,
         calculateScore,
         runGreedy,
         isNightShift,
-        toDateStr
+        toDateStr,
+        isHardConstraint
     };
 }
