@@ -29,6 +29,7 @@ function renderUsers() {
     users.forEach(u => {
         const tr = document.createElement('tr');
 
+        // Secure: Uses textContent to prevent XSS
         const tdId = document.createElement('td');
         tdId.textContent = u.id;
         tr.appendChild(tdId);
@@ -573,19 +574,42 @@ function renderShifts() {
     tbody.innerHTML = '';
     const dNames = ['Su','Mo','Tu','We','Th','Fr','Sa'];
     shifts.forEach(s => {
+        const tr = document.createElement('tr');
+
         const days = (s.days_of_week || '0,1,2,3,4,5,6').split(',').map(Number);
         let dayStr = 'All Days';
         if (days.length < 7) {
             dayStr = days.map(d => dNames[d]).join(', ');
         }
-        tbody.innerHTML += `
-            <tr>
-                <td>${escapeHTML(s.name)} <br><small class="text-secondary">${dayStr}</small></td>
-                <td>${s.start_time} - ${s.end_time}</td>
-                <td>${s.required_staff}</td>
-                <td><button class="btn btn-sm btn-danger" onclick="deleteShift(${s.id})">Delete</button></td>
-            </tr>
-        `;
+
+        const tdName = document.createElement('td');
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = s.name;
+        tdName.appendChild(nameSpan);
+        tdName.appendChild(document.createElement('br'));
+        const daySmall = document.createElement('small');
+        daySmall.className = 'text-secondary';
+        daySmall.textContent = dayStr;
+        tdName.appendChild(daySmall);
+        tr.appendChild(tdName);
+
+        const tdTime = document.createElement('td');
+        tdTime.textContent = `${s.start_time} - ${s.end_time}`;
+        tr.appendChild(tdTime);
+
+        const tdStaff = document.createElement('td');
+        tdStaff.textContent = s.required_staff;
+        tr.appendChild(tdStaff);
+
+        const tdActions = document.createElement('td');
+        const btnDel = document.createElement('button');
+        btnDel.className = 'btn btn-sm btn-danger';
+        btnDel.textContent = 'Delete';
+        btnDel.onclick = () => window.deleteShift(s.id);
+        tdActions.appendChild(btnDel);
+        tr.appendChild(tdActions);
+
+        tbody.appendChild(tr);
     });
 }
 
