@@ -80,7 +80,7 @@ const api = {
 // Auth (Mock)
 api.get('/api/me', (req, res) => {
     // In local mode, we are always admin
-    res.json({ user: { id: 1, username: 'admin', role: 'admin', token: 'local-token' } });
+    res.json({ user: { id: 1, username: 'admin', role: 'admin', token: 'mock-token-' + Math.random().toString(36).slice(2) } });
 });
 api.post('/api/logout', (req, res) => res.json({ message: 'Logged out' }));
 
