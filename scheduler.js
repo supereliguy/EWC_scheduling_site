@@ -18,7 +18,7 @@ const isNightShift = (shift) => {
 };
 
 // We attach to window so it can be called by api-router
-const generateSchedule = async ({ siteId, startDate, days, force }) => {
+const generateSchedule = async ({ siteId, startDate, days, force, iterations, onProgress }) => {
     // Access global db wrapper
     // Check if window.db exists, otherwise use global db (for testing if mocked globally)
     const db = (typeof window !== 'undefined' && window.db) ? window.db : global.db;
@@ -121,16 +121,23 @@ const generateSchedule = async ({ siteId, startDate, days, force }) => {
     }, {});
 
     // 2. Algorithm: Randomized Greedy with Restarts
-    const ITERATIONS = force ? 1 : 100;
-    const MAX_TIME_MS = 3000;
-    const MAX_STAGNANT_ITERATIONS = 20;
+    const maxIterations = iterations ? parseInt(iterations) : (force ? 1 : 100);
+    // Increase time limit if user requested more iterations
+    const MAX_TIME_MS = iterations ? (iterations * 100) : 3000;
+    const MAX_STAGNANT_ITERATIONS = iterations ? Math.ceil(iterations / 2) : 20;
 
     let bestResult = null;
     let bestScore = -Infinity;
     let stagnantIterations = 0;
     const startTime = Date.now();
 
-    for (let i = 0; i < ITERATIONS; i++) {
+    for (let i = 0; i < maxIterations; i++) {
+        // Yield to UI thread for progress updates
+        if (onProgress) {
+            onProgress(Math.round((i / maxIterations) * 100));
+            await new Promise(r => setTimeout(r, 0));
+        }
+
         const result = runGreedy({
             siteId, startObj, days,
             shifts, users, userSettings, requests,
@@ -148,9 +155,14 @@ const generateSchedule = async ({ siteId, startDate, days, force }) => {
         }
 
         // Optimization: Stop if taking too long or not improving
-        if (Date.now() - startTime > MAX_TIME_MS) break;
-        if (stagnantIterations >= MAX_STAGNANT_ITERATIONS) break;
+        // Only if user didn't explicitly request iterations (force implies 1, handled above)
+        // If user set iterations, we try to honor it unless time is absurd
+        if (!iterations && Date.now() - startTime > MAX_TIME_MS) break;
+        if (!iterations && stagnantIterations >= MAX_STAGNANT_ITERATIONS) break;
     }
+
+    // Final progress update
+    if (onProgress) onProgress(100);
 
     if (!bestResult) {
         throw new Error("Could not generate a schedule.");
@@ -238,9 +250,18 @@ const calculateScore = (u, shift, dateObj, state, settings, req) => {
             score += (settings.shift_ranking.length - rankIndex) * 50;
     }
 
-    // 4. Targets
+    // 4. Targets with Priority Weighting
+    // Users with lower priority number (e.g. 1) are more important.
+    // Default is 10. Range approx 1-10.
+    // Factor: Priority 1 -> 10, Priority 10 -> 1.
+    const priority = u.category_priority !== undefined ? u.category_priority : 10;
+    const priorityFactor = Math.max(1, 11 - priority);
+
     const needed = settings.target_shifts - state.totalAssigned;
-    score += needed * 10;
+    // Boost score significantly for high priority users who need shifts.
+    // Also penalizes them heavily if they go over target (needed < 0).
+    // Increased base multiplier to 50 to make 'Need' more competitive against 'Requests'
+    score += needed * 50 * priorityFactor;
 
     // 5. Block Size
     if (state.currentBlockShiftId === shift.id) {

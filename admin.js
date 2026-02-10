@@ -671,14 +671,30 @@ async function runScheduleGeneration(force) {
     // Add force param
     params.force = force;
 
+    const iterInput = document.getElementById('schedule-iterations');
+    params.iterations = iterInput ? iterInput.value : 100;
+
     const statusEl = document.getElementById('generation-status');
+    const progressBar = document.getElementById('generation-progress-bar');
     const btn = document.getElementById('generate-schedule-btn');
 
-    statusEl.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Generating...';
     statusEl.classList.remove('d-none');
+    statusEl.classList.add('d-flex');
+    if (progressBar) {
+        progressBar.style.width = '0%';
+        progressBar.classList.remove('bg-success');
+        progressBar.classList.add('bg-info');
+    }
+
     btn.disabled = true;
 
     await new Promise(r => setTimeout(r, 100));
+
+    // Callback for progress
+    const onProgress = (percent) => {
+        if (progressBar) progressBar.style.width = `${percent}%`;
+    };
+    params.onProgress = onProgress;
 
     try {
         const res = await apiClient.post('/api/schedule/generate', params);
@@ -686,6 +702,11 @@ async function runScheduleGeneration(force) {
         // Check for conflicts/failure
         if (res.conflictReport && res.conflictReport.length > 0) {
             if (force) {
+                 if(progressBar) {
+                     progressBar.style.width = '100%';
+                     progressBar.classList.remove('bg-info');
+                     progressBar.classList.add('bg-warning');
+                 }
                  alert(`Schedule generated with ${res.conflictReport.length} rule violations (Hits). See stats for details.`);
                  loadSchedule();
             } else {
@@ -693,15 +714,20 @@ async function runScheduleGeneration(force) {
                  renderConflictReport(res.conflictReport);
                  new bootstrap.Modal(document.getElementById('conflictModal')).show();
                  statusEl.classList.add('d-none');
+                 statusEl.classList.remove('d-flex');
                  btn.disabled = false;
                  return; // Stop here
             }
         } else {
              // Clean success
-             statusEl.innerHTML = '<span class="text-success fw-bold">Done!</span>';
+             if(progressBar) {
+                 progressBar.style.width = '100%';
+                 progressBar.classList.remove('bg-info');
+                 progressBar.classList.add('bg-success');
+             }
              setTimeout(() => {
                  statusEl.classList.add('d-none');
-                 statusEl.innerHTML = '';
+                 statusEl.classList.remove('d-flex');
              }, 2000);
              loadSchedule();
         }
@@ -709,6 +735,7 @@ async function runScheduleGeneration(force) {
     } catch (e) {
         alert(e.message);
         statusEl.classList.add('d-none');
+        statusEl.classList.remove('d-flex');
     } finally {
         if (!document.querySelector('#conflictModal.show')) {
             btn.disabled = false;

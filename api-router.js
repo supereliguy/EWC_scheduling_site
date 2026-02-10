@@ -313,9 +313,16 @@ api.put('/api/schedule/assignment', (req, res) => {
 
 api.post('/api/schedule/generate', async (req, res) => {
     try {
-        const { siteId, startDate, days, force } = req.body;
+        const { siteId, startDate, days, force, iterations, onProgress } = req.body;
         // Call the global function exposed by scheduler.js
-        const result = await window.generateSchedule({ siteId, startDate, days: parseInt(days), force: !!force });
+        const result = await window.generateSchedule({
+            siteId,
+            startDate,
+            days: parseInt(days),
+            force: !!force,
+            iterations: iterations ? parseInt(iterations) : undefined,
+            onProgress
+        });
         res.json({ message: 'Generated', assignments: result.assignments, conflictReport: result.conflictReport });
     } catch(e) {
         res.status(500).json({ error: e.message });

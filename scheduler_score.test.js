@@ -79,20 +79,21 @@ describe('calculateScore', () => {
     });
 
     describe('Target Shifts', () => {
-        test('Adds 10 points per needed shift', () => {
+        test('Adds 50 points per needed shift (Priority 10)', () => {
             const settings = { ...baseSettings, target_shifts: 10 };
             const state = { ...baseState, totalAssigned: 5 };
-            // Needed: 5. Score: 50.
+            // Needed: 5. Priority: 10 -> Factor 1. Multiplier 50.
+            // Score: 5 * 50 * 1 = 250.
             const score = calculateScore(mockUser, shiftDay, mockDateObj, state, settings, null);
-            expect(score).toBe(50);
+            expect(score).toBe(250);
         });
 
-        test('Subtracts 10 points per excess shift', () => {
+        test('Subtracts 50 points per excess shift', () => {
             const settings = { ...baseSettings, target_shifts: 10 };
             const state = { ...baseState, totalAssigned: 12 };
-            // Needed: -2. Score: -20.
+            // Needed: -2. Score: -100.
             const score = calculateScore(mockUser, shiftDay, mockDateObj, state, settings, null);
-            expect(score).toBe(-20);
+            expect(score).toBe(-100);
         });
     });
 
