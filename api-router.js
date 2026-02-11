@@ -193,7 +193,7 @@ api.get('/api/sites', (req, res) => {
 });
 api.post('/api/sites', (req, res) => {
     const { name, description } = req.body;
-    const result = window.db.prepare('INSERT INTO sites (name, description) VALUES (?, ?)').run(name, description);
+    const result = window.db.prepare('INSERT INTO sites (name, description) VALUES (?, ?)').run(name, description || '');
     // Link admin to site automatically so they show up in schedule
     window.db.prepare('INSERT INTO site_users (site_id, user_id) VALUES (?, 1)').run(result.lastInsertRowid);
     res.json({ message: 'Site created', id: result.lastInsertRowid });
