@@ -98,6 +98,15 @@ window.openSettings = async (id) => {
             checks.forEach(c => c.disabled = !isChecked);
         };
 
+        window.toggleShiftColumn = (shiftId, isChecked) => {
+            const inputs = document.querySelectorAll(`.avail-shift-check`);
+            inputs.forEach(inp => {
+                if (inp.value.startsWith(`${shiftId}-`) && !inp.disabled) {
+                    inp.checked = isChecked;
+                }
+            });
+        };
+
         dayNames.forEach((d, i) => {
             const isChecked = !avail.blocked_days.includes(i);
             daysDiv.innerHTML += `
@@ -140,6 +149,39 @@ window.openSettings = async (id) => {
 
             for (const [siteName, sList] of Object.entries(bySite)) {
                 shiftsDiv.innerHTML += `<h6 class="mt-3 mb-2 text-primary fw-bold border-bottom pb-1">${escapeHTML(siteName)}</h6>`;
+
+                // Render Column Toggles
+                let togglesHtml = `<div class="mb-2 ms-2 p-2 border rounded bg-light">
+                    <small class="fw-bold text-secondary d-block mb-1">Quick Toggles (Enabled Days Only):</small>
+                    <div class="d-flex flex-wrap gap-3">`;
+
+                sList.forEach(sh => {
+                    let isAllChecked = true;
+                    const activeDays = (sh.days_of_week || '0,1,2,3,4,5,6').split(',').map(Number);
+
+                    // Check active days that are not globally blocked
+                    for (const dIndex of activeDays) {
+                         if (avail.blocked_days.includes(dIndex)) continue; // Day is disabled, ignore
+
+                         const key = `${sh.id}-${dIndex}`;
+                         if (avail.blocked_shift_days) {
+                              if (avail.blocked_shift_days.includes(key)) isAllChecked = false;
+                         } else if (avail.blocked_shifts) {
+                              if (avail.blocked_shifts.includes(sh.id)) isAllChecked = false;
+                         }
+                         if (!isAllChecked) break;
+                    }
+
+                    togglesHtml += `
+                        <div class="form-check form-check-inline m-0">
+                            <input class="form-check-input" type="checkbox"
+                                   onchange="toggleShiftColumn('${sh.id}', this.checked)"
+                                   ${isAllChecked ? 'checked' : ''}>
+                            <label class="form-check-label small fw-bold">${escapeHTML(sh.name)}</label>
+                        </div>`;
+                });
+                togglesHtml += `</div></div>`;
+                shiftsDiv.innerHTML += togglesHtml;
 
                 // Render rows for each day 0-6
                 dayNames.forEach((dName, dayIndex) => {
