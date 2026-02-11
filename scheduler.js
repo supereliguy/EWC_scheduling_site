@@ -261,6 +261,14 @@ const checkConstraints = (u, shift, dateStr, dateObj, state, settings, req) => {
     if (settings.availability && settings.availability.blocked_days && settings.availability.blocked_days.includes(dayOfWeek)) {
          return { valid: false, reason: 'Availability (Day Blocked)' };
     }
+
+    // Check specific shift-day blocks (New Format: "shiftId-dayIndex")
+    const specificBlockKey = `${shift.id}-${dayOfWeek}`;
+    if (settings.availability && settings.availability.blocked_shift_days && settings.availability.blocked_shift_days.includes(specificBlockKey)) {
+         return { valid: false, reason: 'Availability (Shift Blocked on Day)' };
+    }
+
+    // Check global shift blocks (Old Format: shiftId)
     if (settings.availability && settings.availability.blocked_shifts && settings.availability.blocked_shifts.includes(shift.id)) {
          return { valid: false, reason: 'Availability (Shift Blocked)' };
     }

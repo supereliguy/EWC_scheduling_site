@@ -87,11 +87,22 @@ window.openSettings = async (id) => {
         const daysDiv = document.getElementById('setting-avail-days');
         const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
         daysDiv.innerHTML = '';
+
+        // Define toggle function in scope or global
+        window.toggleDayAvailability = (dayIndex, isChecked) => {
+            // Update UI for shifts of this day
+            const rows = document.querySelectorAll(`.shift-row-day-${dayIndex}`);
+            rows.forEach(r => r.style.opacity = isChecked ? '1' : '0.5');
+
+            const checks = document.querySelectorAll(`.day-shift-${dayIndex}`);
+            checks.forEach(c => c.disabled = !isChecked);
+        };
+
         dayNames.forEach((d, i) => {
             const isChecked = !avail.blocked_days.includes(i);
             daysDiv.innerHTML += `
                 <div class="form-check">
-                    <input class="form-check-input avail-day-check" type="checkbox" value="${i}" id="ad-${i}" ${isChecked ? 'checked' : ''}>
+                    <input class="form-check-input avail-day-check" type="checkbox" value="${i}" id="ad-${i}" ${isChecked ? 'checked' : ''} onchange="toggleDayAvailability(${i}, this.checked)">
                     <label class="form-check-label" for="ad-${i}">${d}</label>
                 </div>
             `;
@@ -128,15 +139,47 @@ window.openSettings = async (id) => {
             });
 
             for (const [siteName, sList] of Object.entries(bySite)) {
-                shiftsDiv.innerHTML += `<h6 class="mt-2 mb-1 small text-primary fw-bold">${escapeHTML(siteName)}</h6>`;
-                sList.forEach(sh => {
-                    const isChecked = !avail.blocked_shifts.includes(sh.id);
-                    shiftsDiv.innerHTML += `
-                        <div class="form-check form-check-inline">
-                            <input class="form-check-input avail-shift-check" type="checkbox" value="${sh.id}" id="as-${sh.id}" ${isChecked ? 'checked' : ''}>
-                            <label class="form-check-label small" for="as-${sh.id}">${escapeHTML(sh.name)}</label>
-                        </div>
-                    `;
+                shiftsDiv.innerHTML += `<h6 class="mt-3 mb-2 text-primary fw-bold border-bottom pb-1">${escapeHTML(siteName)}</h6>`;
+
+                // Render rows for each day 0-6
+                dayNames.forEach((dName, dayIndex) => {
+                    // Find shifts active on this day
+                    const dayShifts = sList.filter(sh => {
+                         const activeDays = (sh.days_of_week || '0,1,2,3,4,5,6').split(',').map(Number);
+                         return activeDays.includes(dayIndex);
+                    });
+
+                    if (dayShifts.length > 0) {
+                        const isDayAllowed = !avail.blocked_days.includes(dayIndex);
+                        const rowStyle = isDayAllowed ? '' : 'opacity: 0.5;';
+
+                        let rowHtml = `<div class="mb-1 ms-2 d-flex align-items-center shift-row-day-${dayIndex}" style="${rowStyle}">
+                            <strong class="small me-2 text-secondary" style="width: 80px;">${dName}:</strong>
+                            <div class="d-flex flex-wrap gap-2">`;
+
+                        dayShifts.forEach(sh => {
+                            let isChecked = true;
+                            const key = `${sh.id}-${dayIndex}`;
+
+                            if (avail.blocked_shift_days) {
+                                if (avail.blocked_shift_days.includes(key)) isChecked = false;
+                            } else if (avail.blocked_shifts) {
+                                // Fallback: if blocked globally, uncheck everywhere
+                                if (avail.blocked_shifts.includes(sh.id)) isChecked = false;
+                            }
+
+                            const disabled = isDayAllowed ? '' : 'disabled';
+
+                            rowHtml += `
+                                <div class="form-check form-check-inline m-0">
+                                    <input class="form-check-input avail-shift-check day-shift-${dayIndex}" type="checkbox" value="${key}" id="as-${key}" ${isChecked ? 'checked' : ''} ${disabled}>
+                                    <label class="form-check-label small" for="as-${key}">${escapeHTML(sh.name)}</label>
+                                </div>
+                            `;
+                        });
+                        rowHtml += `</div></div>`;
+                        shiftsDiv.innerHTML += rowHtml;
+                    }
                 });
             }
         }
@@ -161,10 +204,12 @@ window.saveSettings = async () => {
     const blocked_days = [];
     document.querySelectorAll('.avail-day-check:not(:checked)').forEach(el => blocked_days.push(parseInt(el.value)));
 
-    const blocked_shifts = [];
-    document.querySelectorAll('.avail-shift-check:not(:checked)').forEach(el => blocked_shifts.push(parseInt(el.value)));
+    const blocked_shift_days = [];
+    // Collect unchecked shift-day boxes. Their value is "shiftId-dayIndex"
+    document.querySelectorAll('.avail-shift-check:not(:checked)').forEach(el => blocked_shift_days.push(el.value));
 
-    const availability_rules = { blocked_days, blocked_shifts };
+    // Clear blocked_shifts (old format) as we migrated to blocked_shift_days
+    const availability_rules = { blocked_days, blocked_shift_days, blocked_shifts: [] };
 
     const body = {
         max_consecutive_shifts: document.getElementById('setting-max-consecutive').value,
