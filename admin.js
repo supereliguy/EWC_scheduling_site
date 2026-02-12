@@ -1868,3 +1868,150 @@ window.processBulkAdd = async () => {
         alert('Error: ' + e.message);
     }
 };
+
+// --- Bulk Metrics Logic ---
+
+window.openBulkMetricsModal = async () => {
+    // Show modal first to indicate loading
+    const modalEl = document.getElementById('bulkMetricsModal');
+    const modal = new bootstrap.Modal(modalEl);
+    modal.show();
+
+    const tbody = document.querySelector('#bulk-metrics-table tbody');
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center">Loading users...</td></tr>';
+
+    try {
+        const data = await apiClient.get('/api/users?includeSettings=true');
+        if (data.users) {
+            renderBulkMetricsTable(data.users);
+        }
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-danger">Error: ${e.message}</td></tr>`;
+    }
+};
+
+function renderBulkMetricsTable(users) {
+    const tbody = document.querySelector('#bulk-metrics-table tbody');
+    tbody.innerHTML = '';
+
+    users.forEach((u, index) => {
+        const s = u.settings || {};
+        const tr = document.createElement('tr');
+
+        // Helper to create input cell
+        const createInput = (val, field, colIndex) => {
+            const td = document.createElement('td');
+            const inp = document.createElement('input');
+            inp.type = 'number';
+            inp.className = 'form-control form-control-sm bulk-metric-input';
+            // Use existing value or empty string (not default fallback here, show what is in DB)
+            // If DB has NULL, show empty.
+            inp.value = val !== undefined && val !== null ? val : '';
+            inp.dataset.userId = u.id;
+            inp.dataset.field = field;
+            inp.dataset.row = index;
+            inp.dataset.col = colIndex;
+            td.appendChild(inp);
+            return td;
+        };
+
+        // Username
+        const tdName = document.createElement('td');
+        tdName.textContent = u.username;
+        tr.appendChild(tdName);
+
+        // Columns: Target, Max, Min, Variance, Block
+        tr.appendChild(createInput(s.target_shifts, 'target_shifts', 1));
+        tr.appendChild(createInput(s.max_consecutive_shifts, 'max_consecutive_shifts', 2));
+        tr.appendChild(createInput(s.min_days_off, 'min_days_off', 3));
+        tr.appendChild(createInput(s.target_shifts_variance, 'target_shifts_variance', 4));
+        tr.appendChild(createInput(s.preferred_block_size, 'preferred_block_size', 5));
+
+        tbody.appendChild(tr);
+    });
+}
+
+// Smart Paste
+const bulkTable = document.getElementById('bulk-metrics-table');
+if (bulkTable) {
+    bulkTable.addEventListener('paste', (e) => {
+        const target = e.target;
+        if (!target.classList.contains('bulk-metric-input')) return;
+
+        e.preventDefault();
+        const clipboardData = (e.clipboardData || window.clipboardData).getData('text');
+        // Handle different newline chars
+        const rows = clipboardData.split(/\r?\n/).filter(r => r.trim() !== '');
+
+        const startRow = parseInt(target.dataset.row);
+        const startCol = parseInt(target.dataset.col);
+
+        const isMultiColumn = rows.some(r => r.includes('\t'));
+
+        if (rows.length > 0) {
+            const inputs = document.querySelectorAll('.bulk-metric-input');
+            const inputMap = new Map();
+            inputs.forEach(inp => {
+                inputMap.set(`${inp.dataset.row}-${inp.dataset.col}`, inp);
+            });
+
+            rows.forEach((rowText, i) => {
+                const currentRowIndex = startRow + i;
+
+                if (isMultiColumn) {
+                    const cols = rowText.split('\t');
+                    cols.forEach((val, j) => {
+                        const currentColIndex = startCol + j;
+                        const inp = inputMap.get(`${currentRowIndex}-${currentColIndex}`);
+                        if (inp) inp.value = val.trim();
+                    });
+                } else {
+                    const inp = inputMap.get(`${currentRowIndex}-${startCol}`);
+                    if (inp) inp.value = rowText.trim();
+                }
+            });
+        }
+    });
+}
+
+window.saveBulkMetrics = async () => {
+    const inputs = document.querySelectorAll('.bulk-metric-input');
+    const updatesMap = new Map();
+
+    inputs.forEach(inp => {
+        const uid = parseInt(inp.dataset.userId);
+        const field = inp.dataset.field;
+        const val = inp.value.trim();
+
+        if (!updatesMap.has(uid)) updatesMap.set(uid, {});
+        const settings = updatesMap.get(uid);
+
+        if (val !== '') {
+            settings[field] = Number(val);
+        }
+    });
+
+    const payload = [];
+    updatesMap.forEach((settings, userId) => {
+        // We only send updates if fields are present.
+        // Note: Logic allows sending partial updates.
+        if (Object.keys(settings).length > 0) {
+            payload.push({ userId, settings });
+        }
+    });
+
+    if (payload.length === 0) return alert('No changes entered.');
+
+    try {
+        const res = await apiClient.put('/api/users/bulk-settings', payload);
+        alert(res.message);
+
+        const modalEl = document.getElementById('bulkMetricsModal');
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        modal.hide();
+
+        loadUsers();
+    } catch (e) {
+        alert(e.message);
+    }
+};
