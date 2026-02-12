@@ -315,8 +315,11 @@ api.get('/api/schedule', (req, res) => {
 });
 
 api.put('/api/schedule/assignment', (req, res) => {
-    const { siteId, date, userId, shiftId } = req.body;
+    const { siteId, date, userId, shiftId, isLocked } = req.body;
     const sId = String(shiftId || '').trim();
+
+    // Default to locked (1) if not specified, preserving old behavior for manual moves
+    const lockedVal = (isLocked === undefined) ? 1 : (isLocked ? 1 : 0);
 
     window.db.transaction(() => {
         window.db.prepare('DELETE FROM assignments WHERE site_id = ? AND date = ? AND user_id = ?').run(siteId, date, userId);
@@ -327,8 +330,8 @@ api.put('/api/schedule/assignment', (req, res) => {
         } else if (sId !== '') {
             window.db.prepare(`
                 INSERT INTO assignments (site_id, date, user_id, shift_id, is_locked, status)
-                VALUES (?, ?, ?, ?, 1, 'draft')
-            `).run(siteId, date, userId, sId);
+                VALUES (?, ?, ?, ?, ?, 'draft')
+            `).run(siteId, date, userId, sId, lockedVal);
         }
     })();
     res.json({ message: 'Updated' });
