@@ -12,19 +12,23 @@ describe('calculateScore', () => {
     // Default Neutral Settings
     const baseSettings = {
         shift_ranking: [],
-        target_shifts: 0,
+        target_shifts: 10,
+        target_variance: 2,
+        max_consecutive: 5,
         preferred_block_size: 3,
         min_days_off: 2
     };
 
     // Default Neutral State
     const baseState = {
-        totalAssigned: 0,
+        totalAssigned: 10, // Match target_shifts to avoid "needed" bonus
         currentBlockShiftId: null,
         currentBlockSize: 0,
         lastShift: null,
         lastDate: null,
-        daysOff: 5 // Well rested
+        daysOff: 5, // Well rested
+        consecutive: 0,
+        weekendShifts: 0
     };
 
     test('Baseline: Returns 0 with neutral inputs', () => {
@@ -42,7 +46,7 @@ describe('calculateScore', () => {
         test('Does not add 1000 if request is not work (e.g. off)', () => {
             const req = { type: 'off' };
             const score = calculateScore(mockUser, shiftDay, mockDateObj, baseState, baseSettings, req);
-            expect(score).toBe(0);
+            expect(score).toBe(-10000); // Penalty for requesting off
         });
     });
 
@@ -58,17 +62,17 @@ describe('calculateScore', () => {
 
         test('Adds score for top ranked shift', () => {
             const score = calculateScore(mockUser, shiftDay, mockDateObj, baseState, rankSettings, null);
-            expect(score).toBe(150);
+            expect(score).toBe(300);
         });
 
         test('Adds score for middle ranked shift', () => {
             const score = calculateScore(mockUser, shiftNight, mockDateObj, baseState, rankSettings, null);
-            expect(score).toBe(100);
+            expect(score).toBe(200);
         });
 
         test('Adds score for lowest ranked shift', () => {
             const score = calculateScore(mockUser, shiftEvening, mockDateObj, baseState, rankSettings, null);
-            expect(score).toBe(50);
+            expect(score).toBe(100);
         });
 
         test('No score if shift not in ranking', () => {
@@ -92,8 +96,9 @@ describe('calculateScore', () => {
             const settings = { ...baseSettings, target_shifts: 10 };
             const state = { ...baseState, totalAssigned: 12 };
             // Needed: -2. Score: -100.
+            // Max Shifts Penalty (12 >= 12): -10000.
             const score = calculateScore(mockUser, shiftDay, mockDateObj, state, settings, null);
-            expect(score).toBe(-100);
+            expect(score).toBe(-10100);
         });
     });
 
@@ -111,14 +116,15 @@ describe('calculateScore', () => {
             expect(score).toBe(200);
         });
 
-        test('Subtracts 100 if continuing block but size >= preferred', () => {
+        test('Subtracts points if continuing block but size >= preferred', () => {
             const state = {
                 ...baseState,
                 currentBlockShiftId: shiftDay.id,
                 currentBlockSize: 3 // >= 3
             };
             const score = calculateScore(mockUser, shiftDay, mockDateObj, state, blockSettings, null);
-            expect(score).toBe(-100);
+            // Weight 5 / 2 = 2.5 * -1000 = -2500
+            expect(score).toBe(-2500);
         });
 
         test('No impact if switching shifts', () => {
@@ -133,7 +139,7 @@ describe('calculateScore', () => {
     });
 
     describe('Soft Circadian Rhythm', () => {
-        // Night -> Day gap <= 3 days penalizes -500
+        // Night -> Day gap <= 3 days penalizes -5000 (Weight 5)
         const lastDate = new Date(mockDateObj.getTime() - (2 * 24 * 60 * 60 * 1000)); // 2 days ago
 
         test('Penalizes Night -> Day transition with short gap', () => {
@@ -144,7 +150,7 @@ describe('calculateScore', () => {
             };
             // Trying to assign Day shift
             const score = calculateScore(mockUser, shiftDay, mockDateObj, state, baseSettings, null);
-            expect(score).toBe(-500);
+            expect(score).toBe(-5000);
         });
 
         test('No penalty if gap > 3 days', () => {
@@ -182,7 +188,7 @@ describe('calculateScore', () => {
     describe('Min Days Off', () => {
          const offSettings = { ...baseSettings, min_days_off: 3 };
 
-         test('Penalizes -2000 if returning to work too early', () => {
+         test('Penalizes -10000 if returning to work too early', () => {
              // User has been off for 1 day, but needs 3.
              // daysOff > 0 && daysOff < min
              const state = {
@@ -190,7 +196,7 @@ describe('calculateScore', () => {
                  daysOff: 1
              };
              const score = calculateScore(mockUser, shiftDay, mockDateObj, state, offSettings, null);
-             expect(score).toBe(-2000);
+             expect(score).toBe(-10000);
          });
 
          test('No penalty if user was working yesterday (daysOff = 0)', () => {

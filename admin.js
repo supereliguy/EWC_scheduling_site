@@ -74,11 +74,6 @@ window.openSettings = async (id) => {
         document.getElementById('setting-variance').value = s.target_shifts_variance || 2;
         document.getElementById('setting-block-size').value = s.preferred_block_size || 3;
 
-        // Shift Ranking
-        let ranking = [];
-        try { ranking = JSON.parse(s.shift_ranking || '[]'); } catch(e) {}
-        document.getElementById('setting-shift-ranking').value = ranking.join('\n');
-
         // Availability Rules
         let avail = { blocked_days: [], blocked_shifts: [] };
         try { avail = JSON.parse(s.availability_rules || '{"blocked_days":[], "blocked_shifts":[]}'); } catch(e) {}
@@ -107,6 +102,18 @@ window.openSettings = async (id) => {
             });
         };
 
+        // Helper for UI Toggling
+        window.toggleShiftRanking = (isDisabled) => {
+             const container = document.getElementById('shift-ranking-container');
+             if (isDisabled) {
+                 container.style.opacity = '0.5';
+                 container.style.pointerEvents = 'none';
+             } else {
+                 container.style.opacity = '1';
+                 container.style.pointerEvents = 'auto';
+             }
+        };
+
         dayNames.forEach((d, i) => {
             const isChecked = !avail.blocked_days.includes(i);
             daysDiv.innerHTML += `
@@ -122,7 +129,10 @@ window.openSettings = async (id) => {
         if(adminSites.length === 0) await loadSites();
 
         const shiftsDiv = document.getElementById('setting-avail-shifts');
+        const rankingContainer = document.getElementById('shift-ranking-container');
+
         shiftsDiv.innerHTML = '<div class="spinner-border spinner-border-sm"></div> Loading shifts...';
+        rankingContainer.innerHTML = '<div class="text-center p-3 text-muted">Loading...</div>';
 
         // Fetch shifts for all sites
         const allShifts = [];
@@ -136,6 +146,91 @@ window.openSettings = async (id) => {
             }
         }
 
+        // --- 1. Render Shift Ranking ---
+        let storedRanking = [];
+        try { storedRanking = JSON.parse(s.shift_ranking || '[]'); } catch(e) {}
+
+        // Setup No Preference Checkbox
+        const noPrefCheck = document.getElementById('setting-no-preference');
+        const isNoPref = !!s.no_preference;
+        noPrefCheck.checked = isNoPref;
+        toggleShiftRanking(isNoPref);
+
+        // Sort shifts based on stored ranking (if IDs present)
+        // If storedRanking has IDs, put them first in order. Unranked shifts go to bottom.
+        let sortedShifts = [...allShifts];
+        if (storedRanking.length > 0) {
+            // Check if ranking uses IDs (numbers) or Names (strings - legacy)
+            const isLegacy = typeof storedRanking[0] === 'string';
+
+            if (!isLegacy) {
+                 const rankMap = new Map();
+                 storedRanking.forEach((id, idx) => rankMap.set(parseInt(id), idx));
+
+                 sortedShifts.sort((a, b) => {
+                     const rankA = rankMap.has(a.id) ? rankMap.get(a.id) : 9999;
+                     const rankB = rankMap.has(b.id) ? rankMap.get(b.id) : 9999;
+                     return rankA - rankB;
+                 });
+            }
+        }
+
+        rankingContainer.innerHTML = '';
+        sortedShifts.forEach(sh => {
+            const el = document.createElement('div');
+            el.className = 'list-group-item list-group-item-action d-flex align-items-center gap-2';
+            el.draggable = true;
+            el.dataset.id = sh.id;
+            el.innerHTML = `
+                <span class="text-muted" style="cursor: grab;">☰</span>
+                <div>
+                    <strong>${escapeHTML(sh.siteName)}</strong>: ${escapeHTML(sh.name)}
+                </div>
+            `;
+
+            // DnD Events
+            el.addEventListener('dragstart', e => {
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', sh.id);
+                el.classList.add('active');
+                window.dragSrcEl = el;
+            });
+            el.addEventListener('dragend', () => {
+                el.classList.remove('active');
+                window.dragSrcEl = null;
+                document.querySelectorAll('#shift-ranking-container .list-group-item').forEach(i => i.classList.remove('border-primary', 'border-2'));
+            });
+            el.addEventListener('dragover', e => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                el.classList.add('border-primary', 'border-2');
+            });
+            el.addEventListener('dragleave', () => {
+                el.classList.remove('border-primary', 'border-2');
+            });
+            el.addEventListener('drop', e => {
+                e.preventDefault();
+                el.classList.remove('border-primary', 'border-2');
+                if (window.dragSrcEl !== el) {
+                    // Reorder DOM
+                    const list = rankingContainer;
+                    // Simple swap or insert logic? Insert Before seems best.
+                    // Determine if dropping above or below
+                    const rect = el.getBoundingClientRect();
+                    const offset = e.clientY - rect.top;
+                    if (offset < (rect.height / 2)) {
+                        list.insertBefore(window.dragSrcEl, el);
+                    } else {
+                        list.insertBefore(window.dragSrcEl, el.nextSibling);
+                    }
+                }
+            });
+
+            rankingContainer.appendChild(el);
+        });
+
+
+        // --- 2. Render Availability Grid ---
         shiftsDiv.innerHTML = '';
         if (allShifts.length === 0) {
             shiftsDiv.innerHTML = '<small class="text-muted">No shifts defined.</small>';
@@ -238,9 +333,14 @@ window.openSettings = async (id) => {
 window.saveSettings = async () => {
     const id = document.getElementById('settings-user-id').value;
 
-    // Parse shift ranking
-    const rankingText = document.getElementById('setting-shift-ranking').value;
-    const ranking = rankingText.split('\n').map(s => s.trim()).filter(s => s);
+    // Parse shift ranking (New)
+    const rankingContainer = document.getElementById('shift-ranking-container');
+    const ranking = [];
+    rankingContainer.querySelectorAll('.list-group-item').forEach(el => {
+        ranking.push(parseInt(el.dataset.id));
+    });
+
+    const noPreference = document.getElementById('setting-no-preference').checked;
 
     // Parse Availability
     const blocked_days = [];
@@ -261,7 +361,8 @@ window.saveSettings = async () => {
         target_shifts_variance: document.getElementById('setting-variance').value,
         preferred_block_size: document.getElementById('setting-block-size').value,
         shift_ranking: JSON.stringify(ranking),
-        availability_rules: JSON.stringify(availability_rules)
+        availability_rules: JSON.stringify(availability_rules),
+        no_preference: noPreference
     };
 
     try {
@@ -281,11 +382,22 @@ window.loadGlobalSettings = async (btn) => {
     const data = await apiClient.get('/api/settings/global');
     if(data.settings) {
         const s = data.settings;
-        document.getElementById('gs-max-consecutive').value = s.max_consecutive_shifts;
-        document.getElementById('gs-min-days-off').value = s.min_days_off;
-        document.getElementById('gs-target-shifts').value = s.target_shifts;
-        document.getElementById('gs-variance').value = s.target_shifts_variance;
-        document.getElementById('gs-block-size').value = s.preferred_block_size;
+        document.getElementById('gs-max-consecutive').value = s.max_consecutive_shifts || 5;
+        document.getElementById('gs-min-days-off').value = s.min_days_off || 2;
+        document.getElementById('gs-target-shifts').value = s.target_shifts || 20;
+        document.getElementById('gs-variance').value = s.target_shifts_variance || 2;
+        document.getElementById('gs-block-size').value = s.preferred_block_size || 3;
+
+        // Weights
+        document.getElementById('rw-availability').value = s.rule_weight_availability || 10;
+        document.getElementById('rw-request-off').value = s.rule_weight_request_off || 10;
+        document.getElementById('rw-max-consecutive').value = s.rule_weight_max_consecutive || 10;
+        document.getElementById('rw-min-days-off').value = s.rule_weight_min_days_off || 10;
+        document.getElementById('rw-target-variance').value = s.rule_weight_target_variance || 10;
+        document.getElementById('rw-circadian-strict').value = s.rule_weight_circadian_strict || 10;
+        document.getElementById('rw-circadian-soft').value = s.rule_weight_circadian_soft || 5;
+        document.getElementById('rw-block-size').value = s.rule_weight_block_size || 5;
+        document.getElementById('rw-weekend-fairness').value = s.rule_weight_weekend_fairness || 5;
     }
 };
 
@@ -296,7 +408,18 @@ window.saveGlobalSettings = async () => {
         target_shifts: document.getElementById('gs-target-shifts').value,
         target_shifts_variance: document.getElementById('gs-variance').value,
         preferred_block_size: document.getElementById('gs-block-size').value,
-        night_preference: 1.0
+        night_preference: 1.0,
+
+        // Weights
+        rule_weight_availability: document.getElementById('rw-availability').value,
+        rule_weight_request_off: document.getElementById('rw-request-off').value,
+        rule_weight_max_consecutive: document.getElementById('rw-max-consecutive').value,
+        rule_weight_min_days_off: document.getElementById('rw-min-days-off').value,
+        rule_weight_target_variance: document.getElementById('rw-target-variance').value,
+        rule_weight_circadian_strict: document.getElementById('rw-circadian-strict').value,
+        rule_weight_circadian_soft: document.getElementById('rw-circadian-soft').value,
+        rule_weight_block_size: document.getElementById('rw-block-size').value,
+        rule_weight_weekend_fairness: document.getElementById('rw-weekend-fairness').value
     };
 
     try {

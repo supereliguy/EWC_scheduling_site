@@ -195,6 +195,20 @@ class DBWrapper {
             console.error("Migration error (weekend_config):", e);
         }
 
+        // Migration: Add no_preference to user_settings if missing
+        try {
+            const result = this.db.exec("PRAGMA table_info(user_settings)");
+            if (result.length > 0) {
+                const cols = result[0].values;
+                const hasNoPref = cols.some(c => c[1] === 'no_preference');
+                if (!hasNoPref) {
+                    this.db.run("ALTER TABLE user_settings ADD COLUMN no_preference INTEGER DEFAULT 0");
+                }
+            }
+        } catch(e) {
+            console.error("Migration error (no_preference):", e);
+        }
+
         // Seed Global Settings
         const globalCount = this.db.exec("SELECT COUNT(*) FROM global_settings")[0].values[0][0];
         if (globalCount === 0) {
