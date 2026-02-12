@@ -39,6 +39,7 @@ describe('validateSchedule', () => {
             if (query.includes('FROM users')) ret.all = () => users;
             if (query.includes('FROM shifts')) ret.all = () => shifts;
             if (query.includes('FROM user_settings')) ret.all = () => userSettings;
+            if (query.includes('FROM global_settings')) ret.all = () => [{ key: 'rule_weight_max_consecutive', value: '5' }];
 
             return ret;
         });

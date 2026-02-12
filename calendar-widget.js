@@ -3,13 +3,13 @@ export class CalendarWidget {
         this.container = document.getElementById(containerId);
         this.options = {
             readOnly: false,
-            onPaint: null, // callback(date, type)
+            onPaint: null, // callback(date, type, shiftId)
             ...options
         };
         this.date = new Date();
-        this.requests = []; // { date: 'YYYY-MM-DD', type: 'work'|'off' }
+        this.requests = []; // { date: 'YYYY-MM-DD', type: 'work'|'off'|'avoid', shiftId, shiftName }
         this.assignments = []; // { date: 'YYYY-MM-DD', shiftName: '...' }
-        this.paintMode = null;
+        this.paintMode = null; // { type: '...', shiftId: ..., shiftName: ... }
         this.isPainting = false;
 
         this.init();
@@ -33,8 +33,8 @@ export class CalendarWidget {
         this.render();
     }
 
-    setPaintMode(mode) {
-        this.paintMode = mode;
+    setPaintMode(type, shiftId = null, shiftName = null) {
+        this.paintMode = { type, shiftId, shiftName };
     }
 
     render() {
@@ -75,6 +75,14 @@ export class CalendarWidget {
             const req = this.requests.find(r => r.date === dateStr);
             if (req) {
                 dayEl.classList.add(req.type);
+                if (req.shiftName) {
+                    const badge = document.createElement('div');
+                    badge.className = 'req-badge';
+                    badge.style.fontSize = '0.7rem';
+                    badge.style.fontWeight = 'bold';
+                    badge.textContent = req.shiftName;
+                    dayEl.appendChild(badge);
+                }
             }
 
             // Assignments
@@ -83,6 +91,7 @@ export class CalendarWidget {
                 dayEl.classList.add('assigned'); // visual indicator
                 // Maybe a small dot or text
                 const badge = document.createElement('div');
+                badge.className = 'assign-badge';
                 badge.style.fontSize = '0.75rem';
                 badge.style.color = '#0d6efd';
                 badge.textContent = assign.shiftName;
@@ -124,25 +133,42 @@ export class CalendarWidget {
     applyPaint(dayEl) {
         if (!this.paintMode) return;
 
-        dayEl.classList.remove('work', 'off');
-        if (this.paintMode !== 'clear') {
-            dayEl.classList.add(this.paintMode);
+        const { type, shiftId, shiftName } = this.paintMode;
+
+        dayEl.classList.remove('work', 'off', 'avoid');
+        // Remove existing request badge
+        const oldBadge = dayEl.querySelector('.req-badge');
+        if (oldBadge) oldBadge.remove();
+
+        if (type !== 'clear') {
+            dayEl.classList.add(type);
+            if (shiftName) {
+                const badge = document.createElement('div');
+                badge.className = 'req-badge';
+                badge.style.fontSize = '0.7rem';
+                badge.style.fontWeight = 'bold';
+                badge.textContent = shiftName;
+                dayEl.appendChild(badge);
+            }
         }
 
         const date = dayEl.dataset.date;
-        const type = this.paintMode === 'clear' ? 'none' : this.paintMode;
+        const reqType = type === 'clear' ? 'none' : type;
 
         // Update internal state
         const idx = this.requests.findIndex(r => r.date === date);
         if (idx > -1) {
-            if (type === 'none') this.requests.splice(idx, 1);
-            else this.requests[idx].type = type;
-        } else if (type !== 'none') {
-            this.requests.push({ date, type });
+            if (reqType === 'none') {
+                this.requests.splice(idx, 1);
+            } else {
+                this.requests[idx] = { date, type: reqType, shiftId, shiftName };
+            }
+        } else if (reqType !== 'none') {
+            this.requests.push({ date, type: reqType, shiftId, shiftName });
         }
 
         if (this.options.onPaint) {
-            this.options.onPaint(date, type);
+            this.options.onPaint(date, reqType, shiftId);
         }
     }
 }

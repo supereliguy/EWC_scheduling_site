@@ -398,6 +398,9 @@ window.loadGlobalSettings = async (btn) => {
         document.getElementById('rw-circadian-soft').value = s.rule_weight_circadian_soft || 5;
         document.getElementById('rw-block-size').value = s.rule_weight_block_size || 5;
         document.getElementById('rw-weekend-fairness').value = s.rule_weight_weekend_fairness || 5;
+        document.getElementById('rw-request-work-specific').value = s.rule_weight_request_work_specific || 10;
+        document.getElementById('rw-request-avoid-shift').value = s.rule_weight_request_avoid_shift || 10;
+        document.getElementById('rw-request-work').value = s.rule_weight_request_work || 10;
     }
 };
 
@@ -419,7 +422,10 @@ window.saveGlobalSettings = async () => {
         rule_weight_circadian_strict: document.getElementById('rw-circadian-strict').value,
         rule_weight_circadian_soft: document.getElementById('rw-circadian-soft').value,
         rule_weight_block_size: document.getElementById('rw-block-size').value,
-        rule_weight_weekend_fairness: document.getElementById('rw-weekend-fairness').value
+        rule_weight_weekend_fairness: document.getElementById('rw-weekend-fairness').value,
+        rule_weight_request_work_specific: document.getElementById('rw-request-work-specific').value,
+        rule_weight_request_avoid_shift: document.getElementById('rw-request-avoid-shift').value,
+        rule_weight_request_work: document.getElementById('rw-request-work').value
     };
 
     try {
@@ -465,22 +471,81 @@ window.openRequestsModal = async () => {
             onPaint: (date, type) => { /* Auto-updates internal state of widget */ }
         });
 
+        const updatePaintMode = () => {
+            const activeBtn = document.querySelector('#requestsModal .btn-group .active');
+            if (!activeBtn) return;
+            const type = activeBtn.id.replace('req-', '').replace('-btn', '');
+
+            const shiftSelect = document.getElementById('req-shift-select');
+            const shiftId = (type === 'work' || type === 'avoid') && shiftSelect.value ? parseInt(shiftSelect.value) : null;
+            let shiftName = null;
+            if (shiftId) shiftName = shiftSelect.options[shiftSelect.selectedIndex].text;
+
+            reqCalendarWidget.setPaintMode(type, shiftId, shiftName);
+        };
+
         // Bind tool buttons
-        ['work', 'off', 'clear'].forEach(mode => {
-            document.getElementById(`req-${mode}-btn`).addEventListener('click', () => {
-                reqCalendarWidget.setPaintMode(mode);
-                ['work', 'off', 'clear'].forEach(m => document.getElementById(`req-${m}-btn`).classList.remove('active', 'btn-primary', 'btn-danger', 'btn-secondary'));
-                // Visual toggle logic... simplify:
-                document.getElementById(`req-${mode}-btn`).style.border = '2px solid blue'; // Basic visual
+        ['work', 'avoid', 'off', 'clear'].forEach(mode => {
+            const btn = document.getElementById(`req-${mode}-btn`);
+            if(!btn) return;
+            btn.addEventListener('click', () => {
+                ['work', 'avoid', 'off', 'clear'].forEach(m => {
+                   const b = document.getElementById(`req-${m}-btn`);
+                   if(b) b.classList.remove('active', 'btn-primary', 'btn-danger', 'btn-warning', 'btn-secondary');
+                });
+
+                // Add active style
+                btn.classList.add('active');
+                if(mode === 'work') btn.classList.add('btn-success');
+                else if(mode === 'avoid') btn.classList.add('btn-warning');
+                else if(mode === 'off') btn.classList.add('btn-danger');
+                else btn.classList.add('btn-secondary');
+
+                // Enable/Disable Shift Select
+                const shiftSelect = document.getElementById('req-shift-select');
+                shiftSelect.disabled = (mode !== 'work' && mode !== 'avoid');
+
+                updatePaintMode();
             });
         });
+
+        document.getElementById('req-shift-select').addEventListener('change', updatePaintMode);
     }
+
+    // Load shifts for initial site to populate dropdown
+    await populateReqShifts(select.value);
 
     updateReqCalendar();
 
     const modal = new bootstrap.Modal(document.getElementById('requestsModal'));
     modal.show();
 };
+
+let currentReqShifts = [];
+
+window.populateReqShifts = async (siteId) => {
+    const shiftSelect = document.getElementById('req-shift-select');
+    shiftSelect.innerHTML = '<option value="">Any Shift</option>';
+    currentReqShifts = [];
+    if(!siteId) return;
+
+    try {
+        const data = await apiClient.get(`/api/sites/${siteId}/shifts`);
+        if(data.shifts) {
+            currentReqShifts = data.shifts;
+            data.shifts.forEach(s => {
+                shiftSelect.innerHTML += `<option value="${s.id}">${escapeHTML(s.name)}</option>`;
+            });
+        }
+    } catch(e) { console.error(e); }
+};
+
+// Hook into site select change to update shifts
+document.getElementById('req-site-select').addEventListener('change', async function() {
+    await populateReqShifts(this.value);
+    updateReqCalendar();
+});
+
 
 window.updateReqCalendar = async () => {
     if (!currentReqUserId) return;
@@ -494,7 +559,19 @@ window.updateReqCalendar = async () => {
 
     const reqData = await apiClient.get(`/api/requests?siteId=${siteId}&month=${month}&year=${year}`);
     // Filter for this user (api returns all for site/month)
-    const userRequests = (reqData.requests || []).filter(r => r.user_id == currentReqUserId);
+    // Map DB fields to Widget fields
+    const userRequests = (reqData.requests || [])
+        .filter(r => r.user_id == currentReqUserId)
+        .map(r => {
+            const shiftId = r.shift_id;
+            const shift = currentReqShifts.find(s => s.id === shiftId);
+            return {
+                date: r.date,
+                type: r.type,
+                shiftId: shiftId,
+                shiftName: shift ? shift.name : null
+            };
+        });
 
     reqCalendarWidget.setMonth(year, month);
     reqCalendarWidget.setData(userRequests);
