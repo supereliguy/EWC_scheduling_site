@@ -5,6 +5,47 @@ const apiClient = {
     delete: (url) => window.api.request('DELETE', url).then(r => { if(r.error) throw new Error(r.error); return r; })
 };
 
+// --- Toast Notification ---
+window.showToast = (message, type = 'info') => {
+    // If running in environment without DOM/Bootstrap (e.g. tests), fallback
+    if (typeof bootstrap === 'undefined' || typeof document === 'undefined') {
+        console.log(`[${type.toUpperCase()}] ${message}`);
+        return;
+    }
+
+    const toastEl = document.getElementById('liveToast');
+    const toastBody = document.getElementById('toast-body');
+    if (!toastEl || !toastBody) return;
+
+    // Reset classes
+    toastEl.className = 'toast align-items-center border-0';
+
+    // Set type color
+    // types: success, danger, warning, info
+    let bgClass = 'text-bg-primary';
+    if (type === 'success') bgClass = 'text-bg-success';
+    else if (type === 'danger') bgClass = 'text-bg-danger';
+    else if (type === 'warning') bgClass = 'text-bg-warning';
+    else if (type === 'info') bgClass = 'text-bg-info';
+
+    toastEl.classList.add(bgClass);
+
+    // Warning text color might need adjustment for readability, but Bootstrap handles text-bg-warning well (dark text)
+    // However, our close button is hardcoded to white.
+    // Ideally we adjust close button color based on background.
+    const closeBtn = toastEl.querySelector('.btn-close');
+    if (type === 'warning' || type === 'info') {
+         if(closeBtn) closeBtn.classList.remove('btn-close-white');
+    } else {
+         if(closeBtn) closeBtn.classList.add('btn-close-white');
+    }
+
+    toastBody.textContent = message;
+
+    const toast = bootstrap.Toast.getOrCreateInstance(toastEl);
+    toast.show();
+};
+
 // State
 let users = [];
 let adminSites = []; // rename to avoid conflict with dashboard sites
@@ -326,7 +367,7 @@ window.openSettings = async (id) => {
         modal.show();
     } catch(e) {
         console.error(e);
-        alert('Error loading settings: ' + e.message);
+        window.showToast('Error loading settings: ' + e.message, 'danger');
     }
 };
 
@@ -367,11 +408,11 @@ window.saveSettings = async () => {
 
     try {
         const res = await apiClient.put(`/api/users/${id}/settings`, body);
-        alert(res.message);
+        window.showToast(res.message, 'success');
         const modalEl = document.getElementById('settingsModal');
         const modal = bootstrap.Modal.getInstance(modalEl);
         modal.hide();
-    } catch(e) { alert(e.message); }
+    } catch(e) { window.showToast(e.message, 'danger'); }
 };
 
 // Global Settings
@@ -434,8 +475,8 @@ window.saveGlobalSettings = async () => {
 
     try {
         const res = await apiClient.put('/api/settings/global', body);
-        alert(res.message);
-    } catch(e) { alert(e.message); }
+        window.showToast(res.message, 'success');
+    } catch(e) { window.showToast(e.message, 'danger'); }
 };
 
 // --- User Requests Calendar Logic ---
@@ -461,7 +502,7 @@ window.openRequestsModal = async () => {
     select.innerHTML = '';
 
     if (sites.length === 0) {
-        alert('This user is not assigned to any sites. Please assign them to a site first.');
+        window.showToast('This user is not assigned to any sites. Please assign them to a site first.', 'warning');
         return;
     }
 
@@ -602,9 +643,9 @@ window.saveUserRequests = async () => {
             year,
             userId: currentReqUserId
         });
-        alert('Requests saved');
+        window.showToast('Requests saved', 'success');
     } catch(e) {
-        alert(e.message);
+        window.showToast(e.message, 'danger');
     }
 };
 
@@ -613,9 +654,9 @@ document.getElementById('create-user-btn').addEventListener('click', async () =>
     const role = document.getElementById('new-role').value;
     if (username) {
         const res = await apiClient.post('/api/users', { username, role });
-        if (res.error) alert(res.error);
+        if (res.error) window.showToast(res.error, 'danger');
         else {
-            alert('User created');
+            window.showToast('User created', 'success');
             loadUsers();
         }
     }
@@ -723,11 +764,11 @@ window.saveSiteUsers = async () => {
 
     try {
         await apiClient.put(`/api/sites/${siteId}/users`, { userIds });
-        alert('Site users updated');
+        window.showToast('Site users updated', 'success');
         const modal = bootstrap.Modal.getInstance(document.getElementById('siteUsersModal'));
         modal.hide();
     } catch(e) {
-        alert(e.message);
+        window.showToast(e.message, 'danger');
     }
 };
 
@@ -747,7 +788,7 @@ window.goToSchedule = (btn) => {
             btn.classList.add('active');
         }
     } else {
-        alert('No sites available. Please create a site first.');
+        window.showToast('No sites available. Please create a site first.', 'warning');
         showSection('sites-section');
     }
 };
@@ -792,13 +833,13 @@ window.saveSiteSettings = async () => {
 
     try {
         await apiClient.put(`/api/sites/${siteId}`, body);
-        alert('Settings saved. Please regenerate stats/schedule to apply changes.');
+        window.showToast('Settings saved. Please regenerate stats/schedule to apply changes.', 'success');
         // Update local adminSites
         const site = adminSites.find(s => s.id == siteId);
         if (site) Object.assign(site, body);
         loadSchedule(); // Refresh stats
     } catch(e) {
-        alert(e.message);
+        window.showToast(e.message, 'danger');
     }
 };
 
@@ -953,10 +994,10 @@ document.getElementById('create-shift-btn').addEventListener('click', async () =
             loadShifts(siteId);
         } catch (e) {
             console.error("Error creating shift:", e);
-            alert("Failed to create shift: " + e.message);
+            window.showToast("Failed to create shift: " + e.message, 'danger');
         }
     } else {
-        alert('Select site and enter shift name');
+        window.showToast('Select site and enter shift name', 'warning');
     }
 });
 
@@ -990,8 +1031,8 @@ window.forceGenerateSchedule = () => {
 
 async function runScheduleGeneration(force) {
     const params = getScheduleParams();
-    if(!params.siteId) return alert('Select site');
-    if(!params.startDate) return alert('Select start date');
+    if(!params.siteId) { window.showToast('Select site', 'warning'); return; }
+    if(!params.startDate) { window.showToast('Select start date', 'warning'); return; }
 
     // Always Force by default for new workflow
     params.force = true;
@@ -1038,7 +1079,7 @@ async function runScheduleGeneration(force) {
         loadSchedule();
 
     } catch (e) {
-        alert(e.message);
+        window.showToast(e.message, 'danger');
         statusEl.classList.add('d-none');
         statusEl.classList.remove('d-flex');
     } finally {
@@ -1417,7 +1458,7 @@ window.updateShiftSlot = async (siteId, date, shiftId, newUserId, oldUserId) => 
         // Reload to refresh view and slots
         loadSchedule();
     } catch(e) {
-        alert('Error updating slot: ' + e.message);
+        window.showToast('Error updating slot: ' + e.message, 'danger');
     }
 };
 
@@ -1601,7 +1642,7 @@ window.updateAssignment = async (siteId, date, userId, shiftId) => {
         await apiClient.put('/api/schedule/assignment', { siteId, date, userId, shiftId, isLocked: !!shiftId });
         loadSchedule(); // Refresh to show lock icon
     } catch(e) {
-        alert('Error updating assignment: ' + e.message);
+        window.showToast('Error updating assignment: ' + e.message, 'danger');
     }
 };
 
@@ -1612,7 +1653,7 @@ window.toggleAssignmentLock = async (siteId, date, userId, shiftId, currentIsLoc
         });
         loadSchedule();
     } catch(e) {
-        alert('Error toggling lock: ' + e.message);
+        window.showToast('Error toggling lock: ' + e.message, 'danger');
     }
 };
 
@@ -1638,7 +1679,7 @@ window.lockAllAssignments = async (isLocked) => {
         });
         loadSchedule();
     } catch(e) {
-        alert(e.message);
+        window.showToast(e.message, 'danger');
     }
 };
 
@@ -1663,7 +1704,7 @@ window.clearSchedule = async () => {
         });
         loadSchedule();
     } catch(e) {
-        alert(e.message);
+        window.showToast(e.message, 'danger');
     }
 };
 
@@ -1694,15 +1735,15 @@ window.loadSnapshots = async () => {
 window.createSnapshot = async () => {
     const desc = document.getElementById('new-snapshot-desc').value;
     const res = await apiClient.post('/api/snapshots', { description: desc });
-    alert(res.message);
+    window.showToast(res.message, 'success');
     loadSnapshots();
 };
 
 window.restoreSnapshot = async (id) => {
     if(confirm('Are you sure? This will overwrite the current database with this snapshot.')) {
         const res = await apiClient.post(`/api/snapshots/${id}/restore`, {});
-        alert(res.message);
-        window.location.reload(); // Refresh to show restored state
+        window.showToast(res.message, 'success');
+        setTimeout(() => window.location.reload(), 1500);
     }
 };
 
@@ -1770,7 +1811,7 @@ window.saveCategory = async () => {
         loadCategories(siteId);
         // Refresh users list if open, as category names might change
         loadSchedule(); // This refreshes users too
-    } catch(e) { alert(e.message); }
+    } catch(e) { window.showToast(e.message, 'danger'); }
 };
 
 window.deleteCategory = async (id) => {
@@ -1786,7 +1827,7 @@ window.updateUserCategory = async (userId, catId) => {
     try {
         await apiClient.put(`/api/sites/${siteId}/user-category`, { userId, categoryId: catId || null });
         // Optional feedback
-    } catch(e) { alert(e.message); }
+    } catch(e) { window.showToast(e.message, 'danger'); }
 };
 
 // Helper for XSS prevention
@@ -1865,7 +1906,7 @@ window.processBulkAdd = async () => {
         else loadSites();
 
     } catch(e) {
-        alert('Error: ' + e.message);
+        window.showToast('Error: ' + e.message, 'danger');
     }
 };
 
@@ -2000,11 +2041,11 @@ window.saveBulkMetrics = async () => {
         }
     });
 
-    if (payload.length === 0) return alert('No changes entered.');
+    if (payload.length === 0) { window.showToast('No changes entered.', 'info'); return; }
 
     try {
         const res = await apiClient.put('/api/users/bulk-settings', payload);
-        alert(res.message);
+        window.showToast(res.message, 'success');
 
         const modalEl = document.getElementById('bulkMetricsModal');
         const modal = bootstrap.Modal.getInstance(modalEl);
@@ -2012,6 +2053,6 @@ window.saveBulkMetrics = async () => {
 
         loadUsers();
     } catch (e) {
-        alert(e.message);
+        window.showToast(e.message, 'danger');
     }
 };
