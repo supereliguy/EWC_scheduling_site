@@ -105,7 +105,8 @@ const fetchScheduleContext = ({ siteId, startDate, days }) => {
     const users = db.prepare(`
         SELECT u.id, u.username, u.role,
                COALESCE(cat.priority, 10) as category_priority,
-               cat.name as category_name
+               cat.name as category_name,
+               COALESCE(cat.is_manual, 0) as is_manual
         FROM users u
         JOIN site_users su ON u.id = su.user_id
         LEFT JOIN user_categories cat ON su.category_id = cat.id
@@ -875,6 +876,7 @@ const runGreedy = ({
 
             // 1. Strict Check (Configurable Weights)
             shuffledUsers.forEach(u => {
+                if (u.is_manual) return;
                 if (assignedToday.has(u.id)) return;
                 const state = userState[u.id];
                 const settings = userSettings[u.id];

@@ -283,9 +283,9 @@
                                 <h4>User Categories</h4>
                                 <button class="btn btn-primary" onclick="openCategoryModal()">Add Category</button>
                             </div>
-                            <p class="text-muted small">Lower priority number means higher importance (e.g. 1 is more important than 10). Higher importance users are prioritized during conflict resolution.</p>
+                            <p class="text-muted small">Lower priority number means higher importance (e.g. 1 is more important than 10). Higher importance users are prioritized during conflict resolution. "Manual" categories are skipped by the auto-scheduler.</p>
                             <table class="table table-bordered" id="categories-table">
-                                <thead><tr><th>Priority</th><th>Name</th><th>Color</th><th>Actions</th></tr></thead>
+                                <thead><tr><th>Priority</th><th>Name</th><th>Color</th><th>Manual Only</th><th>Actions</th></tr></thead>
                                 <tbody></tbody>
                             </table>
                         </div>
@@ -493,6 +493,10 @@
                     <div class="mb-3"><label>Name</label><input type="text" class="form-control" id="cat-name"></div>
                     <div class="mb-3"><label>Priority (Lower number = Higher Importance)</label><input type="number" class="form-control" id="cat-priority" value="10"></div>
                     <div class="mb-3"><label>Color</label><input type="color" class="form-control form-control-color" id="cat-color" value="#ffffff"></div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="cat-is-manual">
+                        <label class="form-check-label" for="cat-is-manual">Manual Assignments Only (Skip Auto-Schedule)</label>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-primary" onclick="saveCategory()">Save</button>

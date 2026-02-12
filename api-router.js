@@ -399,7 +399,7 @@ api.post('/api/schedule/generate', async (req, res) => {
 
 api.get('/api/sites/:siteId/users', (req, res) => {
     const users = window.db.prepare(`
-        SELECT u.id, u.username, u.role, su.category_id, c.name as category_name, c.color as category_color
+        SELECT u.id, u.username, u.role, su.category_id, c.name as category_name, c.color as category_color, c.is_manual
         FROM users u
         JOIN site_users su ON u.id = su.user_id
         LEFT JOIN user_categories c ON su.category_id = c.id
@@ -415,14 +415,14 @@ api.get('/api/sites/:siteId/categories', (req, res) => {
 });
 
 api.post('/api/sites/:siteId/categories', (req, res) => {
-    const { name, priority, color } = req.body;
-    window.db.prepare('INSERT INTO user_categories (site_id, name, priority, color) VALUES (?, ?, ?, ?)').run(req.params.siteId, name, priority, color || '#ffffff');
+    const { name, priority, color, is_manual } = req.body;
+    window.db.prepare('INSERT INTO user_categories (site_id, name, priority, color, is_manual) VALUES (?, ?, ?, ?, ?)').run(req.params.siteId, name, priority, color || '#ffffff', is_manual ? 1 : 0);
     res.json({ message: 'Category created' });
 });
 
 api.put('/api/categories/:id', (req, res) => {
-    const { name, priority, color } = req.body;
-    window.db.prepare('UPDATE user_categories SET name=?, priority=?, color=? WHERE id=?').run(name, priority, color, req.params.id);
+    const { name, priority, color, is_manual } = req.body;
+    window.db.prepare('UPDATE user_categories SET name=?, priority=?, color=?, is_manual=? WHERE id=?').run(name, priority, color, is_manual ? 1 : 0, req.params.id);
     res.json({ message: 'Category updated' });
 });
 
