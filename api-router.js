@@ -96,7 +96,7 @@ api.get('/api/users/:userId/sites', (req, res) => {
 });
 
 api.get('/api/users', (req, res) => {
-    const users = window.db.prepare('SELECT * FROM users').all();
+    const users = window.db.prepare('SELECT * FROM users ORDER BY username ASC').all();
     res.json({ users });
 });
 api.post('/api/users', (req, res) => {
@@ -303,6 +303,7 @@ api.get('/api/schedule', (req, res) => {
         JOIN shifts s ON a.shift_id = s.id
         JOIN users u ON a.user_id = u.id
         WHERE a.site_id = ? AND a.date BETWEEN ? AND ?
+        ORDER BY a.date ASC, u.username ASC
     `).all(siteId, startStr, endStr);
 
     const requests = window.db.prepare(`
@@ -404,6 +405,7 @@ api.get('/api/sites/:siteId/users', (req, res) => {
         JOIN site_users su ON u.id = su.user_id
         LEFT JOIN user_categories c ON su.category_id = c.id
         WHERE su.site_id = ?
+        ORDER BY u.username ASC
     `).all(req.params.siteId);
     res.json({ users });
 });
@@ -445,9 +447,20 @@ api.put('/api/sites/:siteId/users', (req, res) => {
 
     try {
         window.db.transaction(() => {
-            window.db.prepare('DELETE FROM site_users WHERE site_id = ?').run(siteId);
-            const stmt = window.db.prepare('INSERT INTO site_users (site_id, user_id) VALUES (?, ?)');
-            userIds.forEach(uid => stmt.run(siteId, uid));
+            // Smart update: Only add/remove changes to preserve category_id for existing users
+            const currentUsers = window.db.prepare('SELECT user_id FROM site_users WHERE site_id = ?').all(siteId).map(u => u.user_id);
+            const toRemove = currentUsers.filter(uid => !userIds.includes(uid));
+            const toAdd = userIds.filter(uid => !currentUsers.includes(uid));
+
+            if (toRemove.length > 0) {
+                const delStmt = window.db.prepare('DELETE FROM site_users WHERE site_id = ? AND user_id = ?');
+                toRemove.forEach(uid => delStmt.run(siteId, uid));
+            }
+
+            if (toAdd.length > 0) {
+                const addStmt = window.db.prepare('INSERT INTO site_users (site_id, user_id) VALUES (?, ?)');
+                toAdd.forEach(uid => addStmt.run(siteId, uid));
+            }
         })();
         res.json({ message: 'Site users updated' });
     } catch(e) {
