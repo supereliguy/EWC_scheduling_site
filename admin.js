@@ -525,7 +525,7 @@ window.saveSiteUsers = async () => {
 };
 
 // --- Navigation & Schedule Controls ---
-let currentScheduleView = 'timeline'; // 'timeline' or 'calendar'
+let currentScheduleView = 'dates-shifts'; // 'timeline' or 'calendar'
 
 window.goToSchedule = (btn) => {
     // Default to first site if available, or stay if already in a site context
@@ -1288,9 +1288,15 @@ function renderSiteUsersList(users) {
 function renderStats(users, assignments, shifts) {
     const container = document.getElementById('site-stats-display');
 
-    let html = `<table class="table table-bordered"><thead><tr>
-        <th>User</th><th>Total Shifts</th><th>Total Hours</th><th>Weekends</th><th>Nights</th>
-    </tr></thead><tbody>`;
+    let html = `<div class="table-responsive"><table class="table table-bordered table-hover text-nowrap"><thead><tr>
+        <th>User</th><th>Total Shifts</th><th>Total Hours</th><th>Weekends</th><th>Nights</th>`;
+
+    // Dynamic Headers for Shifts
+    shifts.forEach(s => {
+        html += `<th>${escapeHTML(s.name)}</th>`;
+    });
+
+    html += `</tr></thead><tbody>`;
 
     users.forEach(u => {
         const myAssigns = assignments.filter(a => a.user_id === u.id);
@@ -1300,8 +1306,17 @@ function renderStats(users, assignments, shifts) {
         let weekends = 0;
         let nights = 0;
 
+        // Initialize shift counts
+        const shiftCounts = {};
+        shifts.forEach(s => shiftCounts[s.id] = 0);
+
         myAssigns.forEach(a => {
             const shift = shifts.find(s => s.id === a.shift_id) || { start_time: '00:00', end_time: '00:00' };
+
+            // Count Shift Type
+            if (shiftCounts[shift.id] !== undefined) {
+                shiftCounts[shift.id]++;
+            }
 
             // Hours
             const startH = parseInt(shift.start_time.split(':')[0]) + parseInt(shift.start_time.split(':')[1])/60;
@@ -1332,11 +1347,17 @@ function renderStats(users, assignments, shifts) {
             <td>${totalShifts}</td>
             <td>${totalHours.toFixed(1)}</td>
             <td>${weekends}</td>
-            <td>${nights}</td>
-        </tr>`;
+            <td>${nights}</td>`;
+
+        // Render Shift Counts
+        shifts.forEach(s => {
+            html += `<td>${shiftCounts[s.id]}</td>`;
+        });
+
+        html += `</tr>`;
     });
 
-    html += '</tbody></table>';
+    html += '</tbody></table></div>';
     container.innerHTML = html;
 }
 
