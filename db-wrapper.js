@@ -414,12 +414,8 @@ class DBWrapper {
                 }
                 this.lastIdStmt.reset();
 
-                // Save after run?
-                // For performance, we might want to manually save, but let's be safe.
-                // However, doing this inside a loop is bad.
-                // The `transaction` method handles batching.
-                // We'll call save() manually in the API router for now, or debounce it.
-                // For strict safety:
+                // Auto-save is debounced to prevent performance issues during rapid updates.
+                // Transactions should be used for batch operations to ensure atomicity and a single save after commit.
                 if (!this.inTransaction) {
                     this.scheduleSave();
                 }
