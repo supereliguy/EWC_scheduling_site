@@ -135,7 +135,7 @@ describe('API Router Tests', () => {
 
             const result = await api.request('GET', '/api/users');
 
-            expect(mockDb.prepare).toHaveBeenCalledWith('SELECT * FROM users');
+            expect(mockDb.prepare).toHaveBeenCalledWith('SELECT * FROM users ORDER BY username ASC');
             expect(result).toEqual({ users: mockUsers });
         });
 
@@ -149,6 +149,17 @@ describe('API Router Tests', () => {
             expect(mockDb.prepare).toHaveBeenCalledWith('INSERT INTO users (username, role) VALUES (?, ?)');
             expect(runSpy).toHaveBeenCalledWith('newuser', 'user');
             expect(result).toEqual({ message: 'User created', id: 10 });
+        });
+
+        test('GET /api/sites/:siteId/users should fetch users sorted by username', async () => {
+            const mockUsers = [{ id: 1, username: 'test' }];
+            const allSpy = jest.fn().mockReturnValue(mockUsers);
+            mockDb.prepare.mockReturnValue({ all: allSpy });
+
+            const result = await api.request('GET', '/api/sites/1/users');
+
+            expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('ORDER BY u.username ASC'));
+            expect(result).toEqual({ users: mockUsers });
         });
 
         // Schedule
@@ -188,6 +199,15 @@ describe('API Router Tests', () => {
 
             // Month 5 -> 05
             expect(allSpy).toHaveBeenCalledWith('1', '2023-05-01', '2023-05-31');
+        });
+
+        test('GET /api/schedule should fetch assignments sorted by date and username', async () => {
+            const allSpy = jest.fn().mockReturnValue([]);
+            mockDb.prepare.mockReturnValue({ all: allSpy });
+
+            await api.request('GET', '/api/schedule?siteId=1&startDate=2023-01-01&days=5');
+
+            expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('ORDER BY a.date ASC, u.username ASC'));
         });
 
         test('POST /api/schedule/generate should delegate to window.generateSchedule', async () => {
@@ -273,7 +293,8 @@ describe('API Router Tests', () => {
 
             // Expect insert assignment
             expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO assignments'));
-            expect(runSpy).toHaveBeenCalledWith(1, '2023-01-01', 10, '5'); // Note: '5' because input was number but might be cast
+            // Expect 5 args: siteId, date, userId, shiftId, isLocked (default 1)
+            expect(runSpy).toHaveBeenCalledWith(1, '2023-01-01', 10, '5', 1);
         });
 
         test('PUT /api/schedule/assignment should handle OFF request', async () => {
