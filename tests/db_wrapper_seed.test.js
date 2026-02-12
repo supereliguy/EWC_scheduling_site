@@ -15,8 +15,16 @@ describe('DBWrapper.seed', () => {
         mockDb = {
             run: jest.fn(),
             exec: jest.fn(),
-            prepare: jest.fn(),
-            export: jest.fn() // Called by save()
+            prepare: jest.fn(() => ({
+                bind: jest.fn(),
+                step: jest.fn(),
+                getAsObject: jest.fn(),
+                reset: jest.fn(),
+                run: jest.fn(),
+                get: jest.fn()
+            })),
+            export: jest.fn(), // Called by save()
+            getRowsModified: jest.fn(() => 1) // Added
         };
 
         // We need to create a new instance, but since we are testing seed(), we can just use a fresh one.

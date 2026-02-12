@@ -306,7 +306,7 @@ api.get('/api/schedule', (req, res) => {
     `).all(siteId, startStr, endStr);
 
     const requests = window.db.prepare(`
-        SELECT r.date, r.type, r.user_id
+        SELECT r.date, r.type, r.user_id, r.shift_id
         FROM requests r
         WHERE r.site_id = ? AND r.date BETWEEN ? AND ?
     `).all(siteId, startStr, endStr);
@@ -430,7 +430,7 @@ api.post('/api/requests', (req, res) => {
         requests.forEach(r => {
             window.db.prepare('DELETE FROM requests WHERE site_id=? AND user_id=? AND date=?').run(siteId, userId, r.date);
             if(r.type !== 'none') {
-                window.db.prepare('INSERT INTO requests (site_id, user_id, date, type) VALUES (?,?,?,?)').run(siteId, userId, r.date, r.type);
+                window.db.prepare('INSERT INTO requests (site_id, user_id, date, type, shift_id) VALUES (?,?,?,?,?)').run(siteId, userId, r.date, r.type, r.shiftId || null);
             }
         });
     })();

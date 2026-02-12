@@ -209,6 +209,20 @@ class DBWrapper {
             console.error("Migration error (no_preference):", e);
         }
 
+        // Migration: Add shift_id to requests if missing
+        try {
+            const result = this.db.exec("PRAGMA table_info(requests)");
+            if (result.length > 0) {
+                const cols = result[0].values;
+                const hasShiftId = cols.some(c => c[1] === 'shift_id');
+                if (!hasShiftId) {
+                    this.db.run("ALTER TABLE requests ADD COLUMN shift_id INTEGER DEFAULT NULL");
+                }
+            }
+        } catch(e) {
+            console.error("Migration error (requests shift_id):", e);
+        }
+
         // Seed Global Settings
         const globalCount = this.db.exec("SELECT COUNT(*) FROM global_settings")[0].values[0][0];
         if (globalCount === 0) {
@@ -220,6 +234,20 @@ class DBWrapper {
             stmt.run(['target_shifts_variance', '2']);
             stmt.run(['preferred_block_size', '3']);
         }
+
+        // Ensure new weight settings exist (for existing DBs)
+        const ensureSetting = (key, val) => {
+            // Use this.prepare (wrapper) instead of this.db.prepare (raw) to get .get() method
+            const exists = this.prepare("SELECT 1 FROM global_settings WHERE key = ?").get(key);
+            if (!exists) {
+                this.prepare("INSERT INTO global_settings (key, value) VALUES (?, ?)").run(key, val);
+            }
+        };
+
+        ensureSetting('rule_weight_request_work_specific', '10');
+        ensureSetting('rule_weight_request_avoid_shift', '10');
+        ensureSetting('rule_weight_request_work', '10');
+
 
         // Default Admin removed as requested (blank slate)
 

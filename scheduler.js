@@ -128,7 +128,10 @@ const fetchScheduleContext = ({ siteId, startDate, days }) => {
         circadian_strict: parseInt(globalSettings.rule_weight_circadian_strict) || 10, // Night -> Day gap < 1 day
         circadian_soft: parseInt(globalSettings.rule_weight_circadian_soft) || 5,       // Night -> Day gap < 3 days
         block_size: parseInt(globalSettings.rule_weight_block_size) || 5,
-        weekend_fairness: parseInt(globalSettings.rule_weight_weekend_fairness) || 5
+        weekend_fairness: parseInt(globalSettings.rule_weight_weekend_fairness) || 5,
+        request_work_specific: parseInt(globalSettings.rule_weight_request_work_specific) || 10,
+        request_avoid_shift: parseInt(globalSettings.rule_weight_request_avoid_shift) || 10,
+        request_work: parseInt(globalSettings.rule_weight_request_work) || 10
     };
 
     const g = {
@@ -164,7 +167,7 @@ const fetchScheduleContext = ({ siteId, startDate, days }) => {
     });
 
     const requests = db.prepare(`
-        SELECT user_id, date, type FROM requests
+        SELECT user_id, date, type, shift_id FROM requests
         WHERE site_id = ? AND date BETWEEN ? AND ?
     `).all(siteId, toDateStr(startObj), toDateStr(endObj));
 
@@ -286,6 +289,13 @@ const checkConstraints = (u, shift, dateStr, dateObj, state, settings, req, rule
         // If soft, we handle penalty in score, but here it's valid
     }
 
+    // 0.05 Request Avoid Shift
+    if (req && req.type === 'avoid') {
+        if (req.shift_id === shift.id) {
+             if (w.request_avoid_shift >= 10) return { valid: false, reason: 'Requested Avoid Shift' };
+        }
+    }
+
     // 0.1 Availability Rules
     const dayOfWeek = dateObj.getDay(); // 0-6
 
@@ -338,7 +348,10 @@ const calculateScore = (u, shift, dateObj, state, settings, req, site, ruleWeigh
         circadian_strict: 10,
         circadian_soft: 5,
         block_size: 5,
-        weekend_fairness: 5
+        weekend_fairness: 5,
+        request_work_specific: 10,
+        request_avoid_shift: 10,
+        request_work: 10
     };
 
     // Calculate penalty helper: (weight * -1000)
@@ -350,6 +363,11 @@ const calculateScore = (u, shift, dateObj, state, settings, req, site, ruleWeigh
     // Request Off
     if (req && req.type === 'off') {
         score += getPenalty(w.request_off);
+    }
+
+    // Request Avoid Shift
+    if (req && req.type === 'avoid' && req.shift_id === shift.id) {
+        score += getPenalty(w.request_avoid_shift);
     }
 
     // Availability
@@ -383,8 +401,25 @@ const calculateScore = (u, shift, dateObj, state, settings, req, site, ruleWeigh
 
     // --- Standard Soft Rules ---
 
-    // 3. Preferences (Request Work)
-    if (req && req.type === 'work') score += 1000;
+    // 3. Requests (Work)
+    if (req && req.type === 'work') {
+        if (req.shift_id) {
+            // Specific Shift Request
+            if (req.shift_id === shift.id) {
+                // High Bonus!
+                score += (w.request_work_specific * 500); // 10 -> 5000 bonus
+            } else {
+                // Requested work but for different shift.
+                // We should probably NOT reward this much, or maybe a small amount because they want to work?
+                // But if I request Day and you give me Night, I might be unhappy.
+                // Let's give small generic bonus only
+                score += (w.request_work * 100);
+            }
+        } else {
+            // Generic Work Request
+            score += (w.request_work * 100); // 10 -> 1000 bonus (matches old hardcoded 1000)
+        }
+    }
 
     // 4. Shift Ranking (Dynamic Shift ID or fallback to Name)
     if (!settings.no_preference && settings.shift_ranking && settings.shift_ranking.length > 0) {
@@ -454,11 +489,13 @@ const isHardConstraint = (r, ruleWeights) => {
         target_variance: 10,
         availability: 10,
         request_off: 10,
-        circadian_strict: 10
+        circadian_strict: 10,
+        request_avoid_shift: 10
     };
 
     if (!r) return false;
     if (r.includes('Requested Off') && w.request_off >= 10) return true;
+    if (r.includes('Requested Avoid Shift') && w.request_avoid_shift >= 10) return true;
     if (r.includes('Availability') && w.availability >= 10) return true;
     if (r.includes('Max Shifts') && w.target_variance >= 10) return true;
     if (r.includes('Max Consecutive') && w.max_consecutive >= 10) return true;

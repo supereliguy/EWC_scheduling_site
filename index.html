@@ -445,10 +445,14 @@
                          <div class="col-md-3">
                             <input type="month" id="req-calendar-month" class="form-control" onchange="updateReqCalendar()">
                         </div>
-                        <div class="col-md-6 text-end">
+                        <div class="col-md-6 text-end d-flex align-items-center justify-content-end gap-2">
+                            <select id="req-shift-select" class="form-select form-select-sm" style="max-width: 150px;" disabled>
+                                <option value="">Any Shift</option>
+                            </select>
                             <div class="btn-group">
-                                <button id="req-work-btn" class="btn btn-outline-success">Prefer Work</button>
-                                <button id="req-off-btn" class="btn btn-outline-danger">Request Off</button>
+                                <button id="req-work-btn" class="btn btn-outline-success">Work</button>
+                                <button id="req-avoid-btn" class="btn btn-outline-warning text-dark">Avoid</button>
+                                <button id="req-off-btn" class="btn btn-outline-danger">Off</button>
                                 <button id="req-clear-btn" class="btn btn-outline-secondary">Clear</button>
                             </div>
                         </div>
