@@ -1722,11 +1722,13 @@ function renderCategories() {
     if(!tbody) return;
     tbody.innerHTML = '';
     categories.forEach(c => {
+        const manualBadge = c.is_manual ? '<span class="badge bg-secondary">Yes</span>' : '';
         tbody.innerHTML += `
             <tr>
                 <td>${c.priority}</td>
                 <td><span class="badge" style="background-color: ${escapeHTML(c.color)}; color: #000; border: 1px solid #ccc;">${escapeHTML(c.name)}</span></td>
                 <td><div style="width: 20px; height: 20px; background-color: ${escapeHTML(c.color)}; border: 1px solid #ccc;"></div></td>
+                <td>${manualBadge}</td>
                 <td>
                     <button class="btn btn-sm btn-primary" onclick="openCategoryModal(${c.id})">Edit</button>
                     <button class="btn btn-sm btn-danger" onclick="deleteCategory(${c.id})">Delete</button>
@@ -1742,6 +1744,7 @@ window.openCategoryModal = (id=null) => {
     document.getElementById('cat-name').value = cat ? cat.name : '';
     document.getElementById('cat-priority').value = cat ? cat.priority : 10;
     document.getElementById('cat-color').value = cat ? cat.color : '#ffffff';
+    document.getElementById('cat-is-manual').checked = cat ? !!cat.is_manual : false;
 
     new bootstrap.Modal(document.getElementById('categoryModal')).show();
 };
@@ -1752,7 +1755,8 @@ window.saveCategory = async () => {
     const body = {
         name: document.getElementById('cat-name').value,
         priority: document.getElementById('cat-priority').value,
-        color: document.getElementById('cat-color').value
+        color: document.getElementById('cat-color').value,
+        is_manual: document.getElementById('cat-is-manual').checked
     };
 
     try {

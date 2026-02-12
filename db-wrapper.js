@@ -99,6 +99,7 @@ class DBWrapper {
                 name TEXT,
                 priority INTEGER DEFAULT 10,
                 color TEXT DEFAULT '#ffffff',
+                is_manual INTEGER DEFAULT 0,
                 FOREIGN KEY(site_id) REFERENCES sites(id) ON DELETE CASCADE
             );
             CREATE TABLE IF NOT EXISTS site_users (
@@ -221,6 +222,20 @@ class DBWrapper {
             }
         } catch(e) {
             console.error("Migration error (requests shift_id):", e);
+        }
+
+        // Migration: Add is_manual to user_categories if missing
+        try {
+            const result = this.db.exec("PRAGMA table_info(user_categories)");
+            if (result.length > 0) {
+                const cols = result[0].values;
+                const hasIsManual = cols.some(c => c[1] === 'is_manual');
+                if (!hasIsManual) {
+                    this.db.run("ALTER TABLE user_categories ADD COLUMN is_manual INTEGER DEFAULT 0");
+                }
+            }
+        } catch(e) {
+            console.error("Migration error (user_categories is_manual):", e);
         }
 
         // Seed Global Settings
