@@ -96,6 +96,18 @@ api.get('/api/users/:userId/sites', (req, res) => {
 });
 
 api.get('/api/users', (req, res) => {
+    const { includeSettings } = req.query;
+    if (includeSettings) {
+        const users = window.db.prepare('SELECT * FROM users ORDER BY username ASC').all();
+        const settings = window.db.prepare('SELECT * FROM user_settings').all();
+        const settingsMap = new Map();
+        settings.forEach(s => settingsMap.set(s.user_id, s));
+
+        users.forEach(u => {
+            u.settings = settingsMap.get(u.id) || {};
+        });
+        return res.json({ users });
+    }
     const users = window.db.prepare('SELECT * FROM users ORDER BY username ASC').all();
     res.json({ users });
 });
@@ -165,6 +177,80 @@ api.put('/api/users/:id/settings', (req, res) => {
         `).run(id, s.max_consecutive_shifts, s.min_days_off, s.night_preference, s.target_shifts, s.target_shifts_variance, s.preferred_block_size, s.shift_ranking, s.availability_rules || '{}', s.no_preference ? 1 : 0);
     }
     res.json({ message: 'Settings saved' });
+});
+
+api.put('/api/users/bulk-settings', (req, res) => {
+    const updates = req.body; // Array of { userId, settings: { ... } }
+
+    try {
+        window.db.transaction(() => {
+            const getStmt = window.db.prepare('SELECT * FROM user_settings WHERE user_id = ?');
+            const updateStmt = window.db.prepare(`
+                UPDATE user_settings SET
+                max_consecutive_shifts=?, min_days_off=?, night_preference=?, target_shifts=?, target_shifts_variance=?, preferred_block_size=?, shift_ranking=?, availability_rules=?, no_preference=?
+                WHERE user_id=?
+            `);
+            const insertStmt = window.db.prepare(`
+                INSERT INTO user_settings (user_id, max_consecutive_shifts, min_days_off, night_preference, target_shifts, target_shifts_variance, preferred_block_size, shift_ranking, availability_rules, no_preference)
+                VALUES (?,?,?,?,?,?,?,?,?,?)
+            `);
+
+            updates.forEach(u => {
+                const userId = u.userId;
+                const newS = u.settings || {};
+                const existing = getStmt.get(userId);
+
+                // Defaults
+                const defaults = {
+                    max_consecutive_shifts: 5,
+                    min_days_off: 2,
+                    night_preference: 1.0,
+                    target_shifts: 8,
+                    target_shifts_variance: 2,
+                    preferred_block_size: 3,
+                    shift_ranking: '[]',
+                    availability_rules: '{}',
+                    no_preference: 0
+                };
+
+                // Merge logic
+                // If existing, start with it. If not, start with defaults.
+                const merged = existing ? { ...existing } : { ...defaults };
+
+                // Override with new values if present
+                // We map specific keys to ensure safety and mapping
+                const keys = ['max_consecutive_shifts', 'min_days_off', 'night_preference', 'target_shifts', 'target_shifts_variance', 'preferred_block_size', 'shift_ranking', 'availability_rules', 'no_preference'];
+
+                keys.forEach(k => {
+                    if (newS[k] !== undefined && newS[k] !== null) {
+                        merged[k] = newS[k];
+                    }
+                });
+
+                // Prepare params
+                const p = [
+                    merged.max_consecutive_shifts,
+                    merged.min_days_off,
+                    merged.night_preference,
+                    merged.target_shifts,
+                    merged.target_shifts_variance,
+                    merged.preferred_block_size,
+                    typeof merged.shift_ranking === 'string' ? merged.shift_ranking : JSON.stringify(merged.shift_ranking || []),
+                    typeof merged.availability_rules === 'string' ? merged.availability_rules : JSON.stringify(merged.availability_rules || {}),
+                    merged.no_preference ? 1 : 0
+                ];
+
+                if (existing) {
+                    updateStmt.run(...p, userId);
+                } else {
+                    insertStmt.run(userId, ...p);
+                }
+            });
+        })();
+        res.json({ message: 'Bulk settings updated' });
+    } catch(e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 // Global Settings
