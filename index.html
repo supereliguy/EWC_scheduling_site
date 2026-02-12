@@ -61,8 +61,73 @@
                         <div class="col-12 mb-3"><label>Target Shifts</label><input type="number" class="form-control" id="gs-target-shifts"></div>
                         <div class="col-12 mb-3"><label>Target Variance</label><input type="number" class="form-control" id="gs-variance"></div>
                         <div class="col-12 mb-3"><label>Preferred Block Size</label><input type="number" class="form-control" id="gs-block-size"></div>
-                        <div class="col-12 mt-3"><button type="button" class="btn btn-primary" onclick="saveGlobalSettings()">Save Defaults</button></div>
                     </div>
+
+                    <hr class="my-4">
+
+                    <h4>Rule Configuration (Weights)</h4>
+                    <p class="text-muted small">Configure the importance of each rule. <strong>10 = Hard Rule</strong> (Cannot be broken unless forced). <strong>1-9 = Soft Rule</strong> (Higher number means higher penalty for breaking).</p>
+
+                    <div class="table-responsive" style="max-width: 800px;">
+                        <table class="table table-bordered table-striped">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Rule Name</th>
+                                    <th>Weight (1-10)</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Availability (Days/Shifts)</td>
+                                    <td><input type="number" class="form-control" id="rw-availability" min="1" max="10" value="10"></td>
+                                    <td><small class="text-muted">Respect user's blocked days or specific shift blocks.</small></td>
+                                </tr>
+                                <tr>
+                                    <td>Request Off</td>
+                                    <td><input type="number" class="form-control" id="rw-request-off" min="1" max="10" value="10"></td>
+                                    <td><small class="text-muted">Respect user's "Off" requests.</small></td>
+                                </tr>
+                                <tr>
+                                    <td>Max Consecutive Shifts</td>
+                                    <td><input type="number" class="form-control" id="rw-max-consecutive" min="1" max="10" value="10"></td>
+                                    <td><small class="text-muted">Do not exceed the maximum number of consecutive working days.</small></td>
+                                </tr>
+                                <tr>
+                                    <td>Min Days Off</td>
+                                    <td><input type="number" class="form-control" id="rw-min-days-off" min="1" max="10" value="10"></td>
+                                    <td><small class="text-muted">Ensure users get the minimum number of days off after a block of shifts.</small></td>
+                                </tr>
+                                <tr>
+                                    <td>Target Shift Variance</td>
+                                    <td><input type="number" class="form-control" id="rw-target-variance" min="1" max="10" value="10"></td>
+                                    <td><small class="text-muted">Do not exceed the target number of shifts by more than the allowed variance.</small></td>
+                                </tr>
+                                <tr>
+                                    <td>Circadian (Strict)</td>
+                                    <td><input type="number" class="form-control" id="rw-circadian-strict" min="1" max="10" value="10"></td>
+                                    <td><small class="text-muted">Prevent a Day shift immediately following a Night shift (less than 24h rest).</small></td>
+                                </tr>
+                                <tr>
+                                    <td>Circadian (Soft)</td>
+                                    <td><input type="number" class="form-control" id="rw-circadian-soft" min="1" max="10" value="5"></td>
+                                    <td><small class="text-muted">Prefer more than 1 day off when switching from Night to Day.</small></td>
+                                </tr>
+                                <tr>
+                                    <td>Preferred Block Size</td>
+                                    <td><input type="number" class="form-control" id="rw-block-size" min="1" max="10" value="5"></td>
+                                    <td><small class="text-muted">Try to group shifts into blocks of the preferred size.</small></td>
+                                </tr>
+                                <tr>
+                                    <td>Weekend Fairness</td>
+                                    <td><input type="number" class="form-control" id="rw-weekend-fairness" min="1" max="10" value="5"></td>
+                                    <td><small class="text-muted">Distribute weekend shifts evenly among users.</small></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="mt-3"><button type="button" class="btn btn-primary btn-lg" onclick="saveGlobalSettings()">Save All Settings</button></div>
                 </div>
 
                 <!-- Users Section -->
@@ -330,8 +395,15 @@
                             <div class="mb-2"><label>Preferred Block Size</label><input type="number" class="form-control" id="setting-block-size"></div>
                         </div>
                         <div class="col-md-6">
-                            <h6>Shift Ranking (Drag to reorder - TBD)</h6>
-                            <textarea id="setting-shift-ranking" class="form-control" rows="5" placeholder="Enter shift names in order of preference, one per line"></textarea>
+                            <h6>Shift Preference Order</h6>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" id="setting-no-preference" onchange="toggleShiftRanking(this.checked)">
+                                <label class="form-check-label" for="setting-no-preference">No Preference (Random)</label>
+                            </div>
+                            <div id="shift-ranking-container" class="list-group" style="max-height: 250px; overflow-y: auto;">
+                                <div class="text-center p-3 text-muted">Loading...</div>
+                            </div>
+                            <small class="text-muted d-block mt-1">Drag and drop items to prioritize.</small>
                         </div>
                     </div>
                     <hr>

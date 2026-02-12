@@ -117,6 +117,20 @@ const fetchScheduleContext = ({ siteId, startDate, days }) => {
     const globalRows = db.prepare('SELECT * FROM global_settings').all();
     const globalSettings = {};
     globalRows.forEach(r => globalSettings[r.key] = r.value);
+
+    // Default weights (10 = Hard, 1-9 = Soft)
+    const ruleWeights = {
+        max_consecutive: parseInt(globalSettings.rule_weight_max_consecutive) || 10,
+        min_days_off: parseInt(globalSettings.rule_weight_min_days_off) || 10,
+        target_variance: parseInt(globalSettings.rule_weight_target_variance) || 10,
+        availability: parseInt(globalSettings.rule_weight_availability) || 10,
+        request_off: parseInt(globalSettings.rule_weight_request_off) || 10,
+        circadian_strict: parseInt(globalSettings.rule_weight_circadian_strict) || 10, // Night -> Day gap < 1 day
+        circadian_soft: parseInt(globalSettings.rule_weight_circadian_soft) || 5,       // Night -> Day gap < 3 days
+        block_size: parseInt(globalSettings.rule_weight_block_size) || 5,
+        weekend_fairness: parseInt(globalSettings.rule_weight_weekend_fairness) || 5
+    };
+
     const g = {
         max_consecutive: parseInt(globalSettings.max_consecutive_shifts) || 5,
         min_days_off: parseInt(globalSettings.min_days_off) || 2,
@@ -130,6 +144,7 @@ const fetchScheduleContext = ({ siteId, startDate, days }) => {
     users.forEach(u => {
         const s = settingsRows.find(r => r.user_id === u.id) || {};
         let shiftRanking = [];
+        // New format: Array of shift IDs. Old format: Array of shift names.
         try { shiftRanking = JSON.parse(s.shift_ranking || '[]'); } catch(e) {}
 
         let availability = { blocked_days: [], blocked_shifts: [] };
@@ -143,6 +158,7 @@ const fetchScheduleContext = ({ siteId, startDate, days }) => {
             target_variance: s.target_shifts_variance !== undefined ? s.target_shifts_variance : g.target_variance,
             preferred_block_size: s.preferred_block_size !== undefined ? s.preferred_block_size : g.preferred_block_size,
             shift_ranking: shiftRanking,
+            no_preference: !!s.no_preference, // New flag
             availability
         };
     });
@@ -162,7 +178,8 @@ const fetchScheduleContext = ({ siteId, startDate, days }) => {
         startObj, endObj,
         shifts, users, userSettings, requests, requestsMap,
         prevAssignments, lockedAssignments, currentAssignments,
-        site // Add site to context
+        site, // Add site to context
+        ruleWeights // Add weights to context
     };
 };
 
@@ -200,7 +217,8 @@ const generateSchedule = async ({ siteId, startDate, days, force, iterations, on
             prevAssignments: ctx.prevAssignments,
             lockedAssignments: ctx.lockedAssignments,
             forceMode: !!force,
-            site: ctx.site // Pass site
+            site: ctx.site, // Pass site
+            ruleWeights: ctx.ruleWeights // Pass weights
         });
 
         if (result.score > bestScore) {
@@ -252,103 +270,208 @@ const generateSchedule = async ({ siteId, startDate, days, force, iterations, on
     };
 };
 
-const checkConstraints = (u, shift, dateStr, dateObj, state, settings, req) => {
-    // 0. Request Off (Hardest Constraint usually)
-    if (req && req.type === 'off') return { valid: false, reason: 'Requested Off' };
+const checkConstraints = (u, shift, dateStr, dateObj, state, settings, req, ruleWeights) => {
+    const w = ruleWeights || {
+        max_consecutive: 10,
+        min_days_off: 10,
+        target_variance: 10,
+        availability: 10,
+        request_off: 10,
+        circadian_strict: 10
+    };
 
-    // 0.1 Availability Rules (Hard Constraint)
+    // 0. Request Off
+    if (req && req.type === 'off') {
+        if (w.request_off >= 10) return { valid: false, reason: 'Requested Off' };
+        // If soft, we handle penalty in score, but here it's valid
+    }
+
+    // 0.1 Availability Rules
     const dayOfWeek = dateObj.getDay(); // 0-6
+
+    // Check Day Block
     if (settings.availability && settings.availability.blocked_days && settings.availability.blocked_days.includes(dayOfWeek)) {
-         return { valid: false, reason: 'Availability (Day Blocked)' };
+         if (w.availability >= 10) return { valid: false, reason: 'Availability (Day Blocked)' };
     }
 
     // Check specific shift-day blocks (New Format: "shiftId-dayIndex")
     const specificBlockKey = `${shift.id}-${dayOfWeek}`;
     if (settings.availability && settings.availability.blocked_shift_days && settings.availability.blocked_shift_days.includes(specificBlockKey)) {
-         return { valid: false, reason: 'Availability (Shift Blocked on Day)' };
+         if (w.availability >= 10) return { valid: false, reason: 'Availability (Shift Blocked on Day)' };
     }
 
     // Check global shift blocks (Old Format: shiftId)
     if (settings.availability && settings.availability.blocked_shifts && settings.availability.blocked_shifts.includes(shift.id)) {
-         return { valid: false, reason: 'Availability (Shift Blocked)' };
+         if (w.availability >= 10) return { valid: false, reason: 'Availability (Shift Blocked)' };
     }
 
-    // 0.2 Max Variance (Hard Constraint)
+    // 0.2 Max Variance (Target Shifts)
     const maxShifts = (settings.target_shifts || 0) + (settings.target_variance || 0);
     if (state.totalAssigned >= maxShifts) {
-        return { valid: false, reason: `Max Shifts Exceeded (${maxShifts})` };
+        if (w.target_variance >= 10) return { valid: false, reason: `Max Shifts Exceeded (${maxShifts})` };
     }
 
     // 1. Max Consecutive
-    if (state.consecutive + 1 > settings.max_consecutive) return { valid: false, reason: `Max Consecutive Shifts (${settings.max_consecutive})` };
+    if (state.consecutive + 1 > settings.max_consecutive) {
+        if (w.max_consecutive >= 10) return { valid: false, reason: `Max Consecutive Shifts (${settings.max_consecutive})` };
+    }
 
     // 2. Strict Circadian (Night -> Day gap)
     if (state.lastShift && isNightShift(state.lastShift) && !isNightShift(shift)) {
         const gapDays = (dateObj - state.lastDate) / (1000 * 60 * 60 * 24);
         if (gapDays <= 1.1) {
-             return { valid: false, reason: 'Inadequate Rest (Night -> Day)' };
+             if (w.circadian_strict >= 10) return { valid: false, reason: 'Inadequate Rest (Night -> Day)' };
         }
     }
 
     return { valid: true, score: 0 };
 };
 
-const calculateScore = (u, shift, dateObj, state, settings, req, site) => {
+const calculateScore = (u, shift, dateObj, state, settings, req, site, ruleWeights) => {
     let score = 0;
-    // 3. Preferences
-    if (req && req.type === 'work') score += 1000;
+    const w = ruleWeights || {
+        request_off: 10,
+        availability: 10,
+        target_variance: 10,
+        max_consecutive: 10,
+        min_days_off: 10,
+        circadian_strict: 10,
+        circadian_soft: 5,
+        block_size: 5,
+        weekend_fairness: 5
+    };
 
-    const rankIndex = settings.shift_ranking.indexOf(shift.name);
-    if (rankIndex !== -1) {
-            score += (settings.shift_ranking.length - rankIndex) * 50;
+    // Calculate penalty helper: (weight * -1000)
+    // Scale: 1 = -1000, 10 = -10000
+    const getPenalty = (weight) => (weight || 1) * -1000;
+
+    // --- Soft Constraints Checks (failed hard checks are caught here if they were soft) ---
+
+    // Request Off
+    if (req && req.type === 'off') {
+        score += getPenalty(w.request_off);
     }
 
-    // 4. Targets with Priority Weighting
+    // Availability
+    const dayOfWeek = dateObj.getDay();
+    const specificBlockKey = `${shift.id}-${dayOfWeek}`;
+    const blocked = (settings.availability?.blocked_days?.includes(dayOfWeek)) ||
+                    (settings.availability?.blocked_shift_days?.includes(specificBlockKey)) ||
+                    (settings.availability?.blocked_shifts?.includes(shift.id));
+    if (blocked) {
+        score += getPenalty(w.availability);
+    }
+
+    // Max Shifts
+    const maxShifts = (settings.target_shifts || 0) + (settings.target_variance || 0);
+    if (state.totalAssigned >= maxShifts) {
+        score += getPenalty(w.target_variance);
+    }
+
+    // Max Consecutive
+    if (state.consecutive + 1 > settings.max_consecutive) {
+        score += getPenalty(w.max_consecutive);
+    }
+
+    // Strict Circadian
+    if (state.lastShift && isNightShift(state.lastShift) && !isNightShift(shift)) {
+        const gapDays = (dateObj - state.lastDate) / (1000 * 60 * 60 * 24);
+        if (gapDays <= 1.1) {
+             score += getPenalty(w.circadian_strict);
+        }
+    }
+
+    // --- Standard Soft Rules ---
+
+    // 3. Preferences (Request Work)
+    if (req && req.type === 'work') score += 1000;
+
+    // 4. Shift Ranking (Dynamic Shift ID or fallback to Name)
+    if (!settings.no_preference && settings.shift_ranking && settings.shift_ranking.length > 0) {
+        // Try exact ID match first
+        let rankIndex = settings.shift_ranking.indexOf(shift.id);
+
+        // Fallback to name match for legacy settings
+        if (rankIndex === -1) {
+             rankIndex = settings.shift_ranking.indexOf(shift.name);
+        }
+
+        if (rankIndex !== -1) {
+            // Higher rank (lower index) = Higher Score
+            score += (settings.shift_ranking.length - rankIndex) * 100; // Increased weight
+        }
+    }
+
+    // 5. Targets with Priority Weighting
     const priority = u.category_priority !== undefined ? u.category_priority : 10;
     const priorityFactor = Math.max(1, 11 - priority);
 
     const needed = settings.target_shifts - state.totalAssigned;
-    score += needed * 50 * priorityFactor;
+    // Score increases as they get closer to target, but decreases if they exceed it
+    if (needed > 0) {
+        score += needed * 50 * priorityFactor;
+    } else {
+        // Discourage going over target if possible (soft penalty)
+        score -= (state.totalAssigned - settings.target_shifts) * 50;
+    }
 
-    // 5. Block Size
+    // 6. Block Size
     if (state.currentBlockShiftId === shift.id) {
         if (state.currentBlockSize < settings.preferred_block_size) {
-            score += 200;
+            score += 200; // Encourage building blocks
         } else {
-            score -= 100;
+            score += getPenalty(w.block_size / 2); // Penalize exceeding preferred block size slightly
         }
     }
 
-    // 6. Soft Circadian
+    // 7. Soft Circadian (3 day gap)
     if (state.lastShift && isNightShift(state.lastShift) && !isNightShift(shift)) {
         const gapDays = (dateObj - state.lastDate) / (1000 * 60 * 60 * 24);
         if (gapDays <= 3) {
-             score -= 500;
+             score += getPenalty(w.circadian_soft);
         }
     }
 
-    // 7. Min Days Off
+    // 8. Min Days Off
     if (state.daysOff > 0 && state.daysOff < settings.min_days_off) {
-            score -= 2000;
+            score += getPenalty(w.min_days_off); // Treat min_days_off as soft rule with configured weight
     }
 
-    // 8. Weekend Fairness (Dynamic)
+    // 9. Weekend Fairness (Dynamic)
     if (isWeekendShift(dateObj, shift, site)) {
-        score -= (state.weekendShifts * 500);
+        score += (state.weekendShifts * getPenalty(w.weekend_fairness));
     }
 
     return score;
 };
 
-const isHardConstraint = (r) => {
-    if(!r) return false;
-    return r.includes('Availability') || r.includes('Max Shifts') || r.includes('Requested Off');
+const isHardConstraint = (r, ruleWeights) => {
+    // Determine if a failure reason corresponds to a hard constraint based on weights
+    // This is used for conflict reporting
+    const w = ruleWeights || {
+        max_consecutive: 10,
+        min_days_off: 10,
+        target_variance: 10,
+        availability: 10,
+        request_off: 10,
+        circadian_strict: 10
+    };
+
+    if (!r) return false;
+    if (r.includes('Requested Off') && w.request_off >= 10) return true;
+    if (r.includes('Availability') && w.availability >= 10) return true;
+    if (r.includes('Max Shifts') && w.target_variance >= 10) return true;
+    if (r.includes('Max Consecutive') && w.max_consecutive >= 10) return true;
+    if (r.includes('Inadequate Rest') && w.circadian_strict >= 10) return true;
+
+    return false;
 };
 
 const validateSchedule = ({ siteId, startDate, days, assignments: providedAssignments }) => {
     // 1. Fetch Context
     const ctx = fetchScheduleContext({ siteId, startDate, days });
     const assignments = providedAssignments || ctx.currentAssignments;
+    const ruleWeights = ctx.ruleWeights;
 
     // Report Object
     const report = {}; // userId -> { status, issues: [] }
@@ -451,11 +574,20 @@ const validateSchedule = ({ siteId, startDate, days, assignments: providedAssign
             const settings = ctx.userSettings[uId];
             const req = ctx.requestsMap[dateStr] ? ctx.requestsMap[dateStr][uId] : undefined;
 
-            // Run Check
-            const check = checkConstraints(u, shift, dateStr, dateObj, state, settings, req);
+            // Run Check (Force hard constraints check here for reporting)
+            // Note: validateSchedule should report ALL violations, even if they were allowed as soft constraints during generation.
+            // So we use a strict weight set for validation purposes? No, we should respect the configured weights.
+            // If it's configured as soft (Weight < 10), it shouldn't be an ERROR, but maybe a warning?
+
+            // Actually, checkConstraints returns valid:true if it's soft.
+            // We need to know if it *would* have failed.
+            // So let's run checkConstraints with ALL weights set to 10 to detect the violation,
+            // then classify it based on actual weight.
+            const strictWeights = { max_consecutive: 10, min_days_off: 10, target_variance: 10, availability: 10, request_off: 10, circadian_strict: 10 };
+            const check = checkConstraints(u, shift, dateStr, dateObj, state, settings, req, strictWeights);
 
             if (!check.valid) {
-                const type = isHardConstraint(check.reason) ? 'hard' : 'soft';
+                const type = isHardConstraint(check.reason, ruleWeights) ? 'hard' : 'soft';
                 report[uId].issues.push({
                     date: dateStr,
                     type,
@@ -493,7 +625,8 @@ const runGreedy = ({
     prevAssignments: _prevAssignments = [],
     lockedAssignments: _lockedAssignments = [],
     forceMode = false,
-    site = null // Pass site
+    site = null, // Pass site
+    ruleWeights = null // Pass weights
 } = {}) => {
     // Ensure inputs are valid arrays/objects
     const shifts = _shifts || [];
@@ -625,16 +758,16 @@ const runGreedy = ({
         for (const shift of slotsToFill) {
             const candidates = [];
 
-            // 1. Strict Check
+            // 1. Strict Check (Configurable Weights)
             shuffledUsers.forEach(u => {
                 if (assignedToday.has(u.id)) return;
                 const state = userState[u.id];
                 const settings = userSettings[u.id];
                 const req = requestsMap[dateStr] ? requestsMap[dateStr][u.id] : undefined;
 
-                const check = checkConstraints(u, shift, dateStr, dateObj, state, settings, req);
+                const check = checkConstraints(u, shift, dateStr, dateObj, state, settings, req, ruleWeights);
                 if (check.valid) {
-                    const score = calculateScore(u, shift, dateObj, state, settings, req, site); // Pass site
+                    const score = calculateScore(u, shift, dateObj, state, settings, req, site, ruleWeights); // Pass site & weights
                     candidates.push({ user: u, score, reason: null });
                 }
             });
@@ -658,7 +791,9 @@ const runGreedy = ({
                         const state = userState[u.id];
                         const settings = userSettings[u.id];
                         const req = requestsMap[dateStr] ? requestsMap[dateStr][u.id] : undefined;
-                        const check = checkConstraints(u, shift, dateStr, dateObj, state, settings, req);
+                        // Use strict weights (all 10) to find the reason for failure
+                        const strictWeights = { max_consecutive: 10, min_days_off: 10, target_variance: 10, availability: 10, request_off: 10, circadian_strict: 10 };
+                        const check = checkConstraints(u, shift, dateStr, dateObj, state, settings, req, strictWeights);
                         return {
                             user: u,
                             failReason: check.reason,
@@ -668,8 +803,8 @@ const runGreedy = ({
                     });
 
                     sacrificeCandidates.sort((a, b) => {
-                        const aHard = isHardConstraint(a.failReason);
-                        const bHard = isHardConstraint(b.failReason);
+                        const aHard = isHardConstraint(a.failReason, ruleWeights);
+                        const bHard = isHardConstraint(b.failReason, ruleWeights);
                         if (aHard !== bHard) return aHard ? 1 : -1;
                         if (a.priority !== b.priority) return b.priority - a.priority;
                         return a.hits - b.hits;
@@ -709,7 +844,9 @@ const runGreedy = ({
                          const state = userState[u.id];
                          const settings = userSettings[u.id];
                          const req = requestsMap[dateStr] ? requestsMap[dateStr][u.id] : undefined;
-                         const check = checkConstraints(u, shift, dateStr, dateObj, state, settings, req);
+                         // Check strictly to show why they failed
+                         const strictWeights = { max_consecutive: 10, min_days_off: 10, target_variance: 10, availability: 10, request_off: 10, circadian_strict: 10 };
+                         const check = checkConstraints(u, shift, dateStr, dateObj, state, settings, req, strictWeights);
                          return { username: u.username, reason: check.reason };
                     });
                     conflictReport.push({
