@@ -1616,6 +1616,57 @@ window.toggleAssignmentLock = async (siteId, date, userId, shiftId, currentIsLoc
     }
 };
 
+window.lockAllAssignments = async (isLocked) => {
+    const params = getScheduleParams();
+    if(!params.siteId || !params.startDate) return;
+
+    // Calculate endDate
+    const [y, m, d] = params.startDate.split('-').map(Number);
+    const startObj = new Date(y, m - 1, d);
+    const endObj = new Date(startObj);
+    endObj.setDate(startObj.getDate() + parseInt(params.days) - 1);
+    const endDate = window.toDateStr(endObj);
+
+    if (!confirm(`Are you sure you want to ${isLocked ? 'LOCK' : 'UNLOCK'} ALL assignments for this month?`)) return;
+
+    try {
+        await apiClient.post('/api/schedule/lock-all', {
+            siteId: params.siteId,
+            startDate: params.startDate,
+            endDate,
+            isLocked
+        });
+        loadSchedule();
+    } catch(e) {
+        alert(e.message);
+    }
+};
+
+window.clearSchedule = async () => {
+    const params = getScheduleParams();
+    if(!params.siteId || !params.startDate) return;
+
+    // Calculate endDate
+    const [y, m, d] = params.startDate.split('-').map(Number);
+    const startObj = new Date(y, m - 1, d);
+    const endObj = new Date(startObj);
+    endObj.setDate(startObj.getDate() + parseInt(params.days) - 1);
+    const endDate = window.toDateStr(endObj);
+
+    if (!confirm('Are you sure you want to CLEAR ALL assignments for this month? This cannot be undone unless you have a snapshot.')) return;
+
+    try {
+        await apiClient.post('/api/schedule/clear', {
+            siteId: params.siteId,
+            startDate: params.startDate,
+            endDate
+        });
+        loadSchedule();
+    } catch(e) {
+        alert(e.message);
+    }
+};
+
 // Snapshots
 window.openSnapshotsModal = () => {
     const modal = new bootstrap.Modal(document.getElementById('snapshotModal'));

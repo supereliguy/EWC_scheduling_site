@@ -314,6 +314,26 @@ api.get('/api/schedule', (req, res) => {
     res.json({ schedule: assignments, requests });
 });
 
+api.post('/api/schedule/lock-all', (req, res) => {
+    const { siteId, startDate, endDate, isLocked } = req.body;
+    window.db.prepare(`
+        UPDATE assignments
+        SET is_locked = ?
+        WHERE site_id = ? AND date BETWEEN ? AND ?
+    `).run(isLocked ? 1 : 0, siteId, startDate, endDate);
+    res.json({ message: isLocked ? 'Locked all' : 'Unlocked all' });
+});
+
+api.post('/api/schedule/clear', (req, res) => {
+    const { siteId, startDate, endDate } = req.body;
+    // Clear ALL assignments in the range
+    window.db.prepare(`
+        DELETE FROM assignments
+        WHERE site_id = ? AND date BETWEEN ? AND ?
+    `).run(siteId, startDate, endDate);
+    res.json({ message: 'Schedule cleared' });
+});
+
 api.put('/api/schedule/assignment', (req, res) => {
     const { siteId, date, userId, shiftId, isLocked } = req.body;
     const sId = String(shiftId || '').trim();
@@ -349,6 +369,28 @@ api.post('/api/schedule/generate', async (req, res) => {
             iterations: iterations ? parseInt(iterations) : undefined,
             onProgress
         });
+
+        // Auto-save snapshot
+        try {
+            const data = window.db.db.export();
+            const desc = `Auto-save: ${new Date().toLocaleString()}`;
+            window.db.prepare('INSERT INTO snapshots (description, data) VALUES (?, ?)').run(desc, data);
+
+            // Cleanup old snapshots (keep last 20)
+            const countRes = window.db.prepare('SELECT COUNT(*) as count FROM snapshots').get();
+            if (countRes.count > 20) {
+                // Delete oldest, keeping 20
+                window.db.prepare(`
+                    DELETE FROM snapshots
+                    WHERE id NOT IN (
+                        SELECT id FROM snapshots ORDER BY id DESC LIMIT 20
+                    )
+                `).run();
+            }
+        } catch (e) {
+            console.error("Auto-save failed:", e);
+        }
+
         res.json({ message: 'Generated', assignments: result.assignments, conflictReport: result.conflictReport });
     } catch(e) {
         res.status(500).json({ error: e.message });
