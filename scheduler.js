@@ -127,6 +127,7 @@ const fetchScheduleContext = ({ siteId, startDate, days }) => {
         request_off: parseInt(globalSettings.rule_weight_request_off) || 10,
         circadian_strict: parseInt(globalSettings.rule_weight_circadian_strict) || 10, // Night -> Day gap < 1 day
         circadian_soft: parseInt(globalSettings.rule_weight_circadian_soft) || 5,       // Night -> Day gap < 3 days
+        min_consecutive_nights: parseInt(globalSettings.rule_weight_min_consecutive_nights) || 5, // New
         block_size: parseInt(globalSettings.rule_weight_block_size) || 5,
         weekend_fairness: parseInt(globalSettings.rule_weight_weekend_fairness) || 5,
         request_work_specific: parseInt(globalSettings.rule_weight_request_work_specific) || 10,
@@ -137,6 +138,7 @@ const fetchScheduleContext = ({ siteId, startDate, days }) => {
     const g = {
         max_consecutive: parseInt(globalSettings.max_consecutive_shifts) || 5,
         min_days_off: parseInt(globalSettings.min_days_off) || 2,
+        min_consecutive_nights: parseInt(globalSettings.min_consecutive_nights) || 2, // New
         night_pref: parseFloat(globalSettings.night_preference) || 1.0,
         target_shifts: parseInt(globalSettings.target_shifts) || 20,
         target_variance: parseInt(globalSettings.target_shifts_variance) || 2,
@@ -156,6 +158,7 @@ const fetchScheduleContext = ({ siteId, startDate, days }) => {
         userSettings[u.id] = {
             max_consecutive: s.max_consecutive_shifts !== undefined ? s.max_consecutive_shifts : g.max_consecutive,
             min_days_off: s.min_days_off !== undefined ? s.min_days_off : g.min_days_off,
+            min_consecutive_nights: g.min_consecutive_nights, // Global only for now
             night_pref: s.night_preference !== undefined ? s.night_preference : g.night_pref,
             target_shifts: s.target_shifts !== undefined ? s.target_shifts : g.target_shifts,
             target_variance: s.target_shifts_variance !== undefined ? s.target_shifts_variance : g.target_variance,
@@ -334,6 +337,14 @@ const checkConstraints = (u, shift, dateStr, dateObj, state, settings, req, rule
         }
     }
 
+    // 3. Min Consecutive Nights (Prevent breaking streak early)
+    if (!isNightShift(shift)) { // Day shift
+        // If we are currently in a night streak (implied by consecutiveNights > 0, meaning yesterday was Night)
+        if (state.consecutiveNights > 0 && state.consecutiveNights < settings.min_consecutive_nights) {
+             if (w.min_consecutive_nights >= 10) return { valid: false, reason: `Min Consecutive Nights (${state.consecutiveNights}/${settings.min_consecutive_nights})` };
+        }
+    }
+
     return { valid: true, score: 0 };
 };
 
@@ -397,6 +408,17 @@ const calculateScore = (u, shift, dateObj, state, settings, req, site, ruleWeigh
         if (gapDays <= 1.1) {
              score += getPenalty(w.circadian_strict);
         }
+    }
+
+    // Min Consecutive Nights
+    if (isNightShift(shift)) {
+         if (state.consecutiveNights > 0 && state.consecutiveNights < settings.min_consecutive_nights) {
+             score += 5000; // Big bonus to continue the streak
+         }
+    } else {
+         if (state.consecutiveNights > 0 && state.consecutiveNights < settings.min_consecutive_nights) {
+             score += getPenalty(w.min_consecutive_nights);
+         }
     }
 
     // --- Standard Soft Rules ---
@@ -524,6 +546,7 @@ const validateSchedule = ({ siteId, startDate, days, assignments: providedAssign
         let daysOff = 0;
         let lastShift = null;
         let lastDate = null;
+        let consecutiveNights = 0;
 
         if (myPrev.length > 0) {
             const last = myPrev[myPrev.length - 1];
@@ -545,6 +568,19 @@ const validateSchedule = ({ siteId, startDate, days, assignments: providedAssign
                 daysOff = Math.floor(gap) - 1;
                 consecutive = 0;
             }
+
+            // Calculate consecutiveNights (backwards from last shift if it was night)
+            if (isNightShift(lastShift) && gap <= 1) {
+                 consecutiveNights = 1;
+                 for (let i = myPrev.length - 2; i >= 0; i--) {
+                     const curr = new Date(myPrev[i].date);
+                     const next = new Date(myPrev[i+1].date);
+                     if ((next - curr) / (1000 * 60 * 60 * 24) === 1) {
+                         if (isNightShift(myPrev[i])) consecutiveNights++;
+                         else break;
+                     } else break;
+                 }
+            }
         } else {
             daysOff = 99;
         }
@@ -558,7 +594,8 @@ const validateSchedule = ({ siteId, startDate, days, assignments: providedAssign
             hits: 0,
             currentBlockShiftId: lastShift ? lastShift.shift_id : null,
             currentBlockSize: consecutive,
-            weekendShifts: 0
+            weekendShifts: 0,
+            consecutiveNights
         };
     });
 
@@ -577,6 +614,18 @@ const validateSchedule = ({ siteId, startDate, days, assignments: providedAssign
                 s.currentBlockShiftId = shift.id;
                 s.currentBlockSize = 1;
             }
+
+            // Consecutive Nights Update
+            if (isNightShift(shift)) {
+                 if (s.lastShift && isNightShift(s.lastShift) && (dateObj - s.lastDate)/(1000*60*60*24) === 1) {
+                     s.consecutiveNights++;
+                 } else {
+                     s.consecutiveNights = 1;
+                 }
+            } else {
+                s.consecutiveNights = 0;
+            }
+
             s.lastShift = shift;
             s.lastDate = dateObj;
         } else {
@@ -584,6 +633,7 @@ const validateSchedule = ({ siteId, startDate, days, assignments: providedAssign
             s.daysOff++;
             s.currentBlockSize = 0;
             s.currentBlockShiftId = null;
+            s.consecutiveNights = 0;
         }
     };
 
@@ -700,6 +750,7 @@ const runGreedy = ({
         let daysOff = 0;
         let lastShift = null;
         let lastDate = null;
+        let consecutiveNights = 0;
 
         if (myPrev.length > 0) {
             const last = myPrev[myPrev.length - 1];
@@ -721,6 +772,19 @@ const runGreedy = ({
                 daysOff = Math.floor(gap) - 1;
                 consecutive = 0;
             }
+
+            // Calculate consecutiveNights (backwards from last shift if it was night)
+            if (isNightShift(lastShift) && gap <= 1) {
+                 consecutiveNights = 1;
+                 for (let i = myPrev.length - 2; i >= 0; i--) {
+                     const curr = new Date(myPrev[i].date);
+                     const next = new Date(myPrev[i+1].date);
+                     if ((next - curr) / (1000 * 60 * 60 * 24) === 1) {
+                         if (isNightShift(myPrev[i])) consecutiveNights++;
+                         else break;
+                     } else break;
+                 }
+            }
         } else {
             daysOff = 99;
         }
@@ -734,7 +798,8 @@ const runGreedy = ({
             hits: 0,
             currentBlockShiftId: lastShift ? lastShift.shift_id : null,
             currentBlockSize: consecutive,
-            weekendShifts: 0
+            weekendShifts: 0,
+            consecutiveNights
         };
     });
 
@@ -753,6 +818,18 @@ const runGreedy = ({
                 s.currentBlockShiftId = shift.id;
                 s.currentBlockSize = 1;
             }
+
+            // Consecutive Nights Update
+            if (isNightShift(shift)) {
+                 if (s.lastShift && isNightShift(s.lastShift) && (dateObj - s.lastDate)/(1000*60*60*24) === 1) {
+                     s.consecutiveNights++;
+                 } else {
+                     s.consecutiveNights = 1;
+                 }
+            } else {
+                s.consecutiveNights = 0;
+            }
+
             s.lastShift = shift;
             s.lastDate = dateObj;
         } else {
@@ -760,6 +837,7 @@ const runGreedy = ({
             s.daysOff++;
             s.currentBlockSize = 0;
             s.currentBlockShiftId = null;
+            s.consecutiveNights = 0;
         }
     };
 

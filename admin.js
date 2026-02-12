@@ -387,6 +387,7 @@ window.loadGlobalSettings = async (btn) => {
         document.getElementById('gs-target-shifts').value = s.target_shifts || 20;
         document.getElementById('gs-variance').value = s.target_shifts_variance || 2;
         document.getElementById('gs-block-size').value = s.preferred_block_size || 3;
+        document.getElementById('gs-min-consecutive-nights').value = s.min_consecutive_nights || 2;
 
         // Weights
         document.getElementById('rw-availability').value = s.rule_weight_availability || 10;
@@ -396,6 +397,7 @@ window.loadGlobalSettings = async (btn) => {
         document.getElementById('rw-target-variance').value = s.rule_weight_target_variance || 10;
         document.getElementById('rw-circadian-strict').value = s.rule_weight_circadian_strict || 10;
         document.getElementById('rw-circadian-soft').value = s.rule_weight_circadian_soft || 5;
+        document.getElementById('rw-min-consecutive-nights').value = s.rule_weight_min_consecutive_nights || 5;
         document.getElementById('rw-block-size').value = s.rule_weight_block_size || 5;
         document.getElementById('rw-weekend-fairness').value = s.rule_weight_weekend_fairness || 5;
         document.getElementById('rw-request-work-specific').value = s.rule_weight_request_work_specific || 10;
@@ -411,6 +413,7 @@ window.saveGlobalSettings = async () => {
         target_shifts: document.getElementById('gs-target-shifts').value,
         target_shifts_variance: document.getElementById('gs-variance').value,
         preferred_block_size: document.getElementById('gs-block-size').value,
+        min_consecutive_nights: document.getElementById('gs-min-consecutive-nights').value,
         night_preference: 1.0,
 
         // Weights
@@ -421,6 +424,7 @@ window.saveGlobalSettings = async () => {
         rule_weight_target_variance: document.getElementById('rw-target-variance').value,
         rule_weight_circadian_strict: document.getElementById('rw-circadian-strict').value,
         rule_weight_circadian_soft: document.getElementById('rw-circadian-soft').value,
+        rule_weight_min_consecutive_nights: document.getElementById('rw-min-consecutive-nights').value,
         rule_weight_block_size: document.getElementById('rw-block-size').value,
         rule_weight_weekend_fairness: document.getElementById('rw-weekend-fairness').value,
         rule_weight_request_work_specific: document.getElementById('rw-request-work-specific').value,
@@ -471,46 +475,12 @@ window.openRequestsModal = async () => {
             onPaint: (date, type) => { /* Auto-updates internal state of widget */ }
         });
 
-        const updatePaintMode = () => {
-            const activeBtn = document.querySelector('#requestsModal .btn-group .active');
-            if (!activeBtn) return;
-            const type = activeBtn.id.replace('req-', '').replace('-btn', '');
-
-            const shiftSelect = document.getElementById('req-shift-select');
-            const shiftId = (type === 'work' || type === 'avoid') && shiftSelect.value ? parseInt(shiftSelect.value) : null;
-            let shiftName = null;
-            if (shiftId) shiftName = shiftSelect.options[shiftSelect.selectedIndex].text;
-
-            reqCalendarWidget.setPaintMode(type, shiftId, shiftName);
-        };
-
-        // Bind tool buttons
-        ['work', 'avoid', 'off', 'clear'].forEach(mode => {
-            const btn = document.getElementById(`req-${mode}-btn`);
-            if(!btn) return;
-            btn.addEventListener('click', () => {
-                ['work', 'avoid', 'off', 'clear'].forEach(m => {
-                   const b = document.getElementById(`req-${m}-btn`);
-                   if(b) b.classList.remove('active', 'btn-primary', 'btn-danger', 'btn-warning', 'btn-secondary');
-                });
-
-                // Add active style
-                btn.classList.add('active');
-                if(mode === 'work') btn.classList.add('btn-success');
-                else if(mode === 'avoid') btn.classList.add('btn-warning');
-                else if(mode === 'off') btn.classList.add('btn-danger');
-                else btn.classList.add('btn-secondary');
-
-                // Enable/Disable Shift Select
-                const shiftSelect = document.getElementById('req-shift-select');
-                shiftSelect.disabled = (mode !== 'work' && mode !== 'avoid');
-
-                updatePaintMode();
-            });
-        });
-
-        document.getElementById('req-shift-select').addEventListener('change', updatePaintMode);
+        // Bind select change
+        document.getElementById('req-shift-select').addEventListener('change', window.updateReqWidgetState);
     }
+
+    // Default mode
+    window.setReqMode('work');
 
     // Load shifts for initial site to populate dropdown
     await populateReqShifts(select.value);
@@ -522,6 +492,43 @@ window.openRequestsModal = async () => {
 };
 
 let currentReqShifts = [];
+
+window.setReqMode = (mode) => {
+    // UI Update
+    ['work', 'avoid', 'off', 'clear'].forEach(m => {
+        const btn = document.getElementById(`req-${m}-btn`);
+        if(btn) btn.classList.remove('active', 'btn-success', 'btn-warning', 'btn-danger', 'btn-secondary');
+    });
+
+    const btn = document.getElementById(`req-${mode}-btn`);
+    if(btn) {
+        btn.classList.add('active');
+        if(mode === 'work') btn.classList.add('btn-success');
+        else if(mode === 'avoid') btn.classList.add('btn-warning');
+        else if(mode === 'off') btn.classList.add('btn-danger');
+        else btn.classList.add('btn-secondary');
+    }
+
+    const shiftSelect = document.getElementById('req-shift-select');
+    shiftSelect.disabled = (mode !== 'work' && mode !== 'avoid');
+
+    window.updateReqWidgetState();
+};
+
+window.updateReqWidgetState = () => {
+    const activeBtn = document.querySelector('#requestsModal .btn-group .active');
+    if (!activeBtn) return;
+    const mode = activeBtn.id.replace('req-', '').replace('-btn', '');
+
+    const shiftSelect = document.getElementById('req-shift-select');
+    const shiftId = (mode === 'work' || mode === 'avoid') && shiftSelect.value ? parseInt(shiftSelect.value) : null;
+    let shiftName = null;
+    if (shiftId) shiftName = shiftSelect.options[shiftSelect.selectedIndex].text;
+
+    if(reqCalendarWidget) {
+        reqCalendarWidget.setPaintMode(mode, shiftId, shiftName);
+    }
+};
 
 window.populateReqShifts = async (siteId) => {
     const shiftSelect = document.getElementById('req-shift-select');
@@ -1225,7 +1232,8 @@ function renderScheduleTimelineView(container, params, assignments, requests, sh
             else if (assign) cellClass += ' schedule-cell-assigned';
 
             html += `<td class="${cellClass}">`;
-            html += `<select onchange="updateAssignment(${params.siteId}, '${dateStr}', ${u.id}, this.value)">`;
+            html += `<div class="d-flex align-items-center gap-1 justify-content-center">`;
+            html += `<select class="form-select form-select-sm" style="min-width: 80px;" onchange="updateAssignment(${params.siteId}, '${dateStr}', ${u.id}, this.value)">`;
             html += `<option value="">-</option>`;
             html += `<option value="OFF" ${currentShiftId === 'OFF' ? 'selected' : ''}>OFF</option>`;
             shifts.forEach(s => {
@@ -1235,7 +1243,13 @@ function renderScheduleTimelineView(container, params, assignments, requests, sh
                 html += `<option value="${s.id}" ${selected}>${escapeHTML(s.name)}</option>`;
             });
             html += `</select>`;
-            html += `</td>`;
+
+            if (currentShiftId && currentShiftId !== 'OFF') {
+                 const icon = isLocked ? '🔒' : '🔓';
+                 const color = isLocked ? 'text-danger' : 'text-secondary';
+                 html += `<span class="${color}" style="cursor: pointer; font-size: 1.1rem;" onclick="toggleAssignmentLock(${params.siteId}, '${dateStr}', ${u.id}, '${currentShiftId}', ${isLocked})">${icon}</span>`;
+            }
+            html += `</div></td>`;
         }
         html += '</tr>';
     });
@@ -1288,14 +1302,23 @@ function renderScheduleDatesShiftsView(container, params, assignments, requests,
             for(let k=0; k<slots; k++) {
                 const assign = shiftAssigns[k]; // undefined if empty slot
                 const currentUserId = assign ? assign.user_id : '';
+                const isLocked = assign ? assign.is_locked : false;
 
-                html += `<select class="form-select form-select-sm mb-1" onchange="updateShiftSlot(${params.siteId}, '${dateStr}', ${s.id}, this.value, '${currentUserId}')">`;
+                html += `<div class="d-flex align-items-center gap-1 mb-1">`;
+                html += `<select class="form-select form-select-sm" onchange="updateShiftSlot(${params.siteId}, '${dateStr}', ${s.id}, this.value, '${currentUserId}')">`;
                 html += `<option value="">-</option>`;
                 users.forEach(u => {
                     const selected = u.id === currentUserId ? 'selected' : '';
                     html += `<option value="${u.id}" ${selected}>${escapeHTML(u.username)}</option>`;
                 });
                 html += `</select>`;
+
+                if (assign) {
+                     const icon = isLocked ? '🔒' : '🔓';
+                     const color = isLocked ? 'text-danger' : 'text-secondary';
+                     html += `<span class="${color}" style="cursor: pointer;" onclick="toggleAssignmentLock(${params.siteId}, '${dateStr}', ${currentUserId}, '${s.id}', ${isLocked})">${icon}</span>`;
+                }
+                html += `</div>`;
             }
             html += '</td>';
         });
@@ -1347,14 +1370,23 @@ function renderScheduleShiftsDatesView(container, params, assignments, requests,
             for(let k=0; k<slots; k++) {
                 const assign = shiftAssigns[k];
                 const currentUserId = assign ? assign.user_id : '';
+                const isLocked = assign ? assign.is_locked : false;
 
-                html += `<select class="form-select form-select-sm mb-1" onchange="updateShiftSlot(${params.siteId}, '${dateStr}', ${s.id}, this.value, '${currentUserId}')">`;
+                html += `<div class="d-flex align-items-center gap-1 mb-1">`;
+                html += `<select class="form-select form-select-sm" onchange="updateShiftSlot(${params.siteId}, '${dateStr}', ${s.id}, this.value, '${currentUserId}')">`;
                 html += `<option value="">-</option>`;
                 users.forEach(u => {
                     const selected = u.id === currentUserId ? 'selected' : '';
                     html += `<option value="${u.id}" ${selected}>${escapeHTML(u.username)}</option>`;
                 });
                 html += `</select>`;
+
+                if (assign) {
+                     const icon = isLocked ? '🔒' : '🔓';
+                     const color = isLocked ? 'text-danger' : 'text-secondary';
+                     html += `<span class="${color}" style="cursor: pointer;" onclick="toggleAssignmentLock(${params.siteId}, '${dateStr}', ${currentUserId}, '${s.id}', ${isLocked})">${icon}</span>`;
+                }
+                html += `</div>`;
             }
             html += '</td>';
         }
@@ -1564,10 +1596,23 @@ function renderStats(users, assignments, shifts) {
 window.updateAssignment = async (siteId, date, userId, shiftId) => {
     // shiftId might be empty string if cleared
     try {
-        await apiClient.put('/api/schedule/assignment', { siteId, date, userId, shiftId });
-        // Optional: specific UI feedback, currently just reliance on persistence
+        // If assigning a new shift manually, default to LOCKED (true)
+        // If clearing (shiftId=''), isLocked doesn't matter much but we can send false
+        await apiClient.put('/api/schedule/assignment', { siteId, date, userId, shiftId, isLocked: !!shiftId });
+        loadSchedule(); // Refresh to show lock icon
     } catch(e) {
         alert('Error updating assignment: ' + e.message);
+    }
+};
+
+window.toggleAssignmentLock = async (siteId, date, userId, shiftId, currentIsLocked) => {
+    try {
+        await apiClient.put('/api/schedule/assignment', {
+            siteId, date, userId, shiftId, isLocked: !currentIsLocked
+        });
+        loadSchedule();
+    } catch(e) {
+        alert('Error toggling lock: ' + e.message);
     }
 };
 

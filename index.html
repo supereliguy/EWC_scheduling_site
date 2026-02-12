@@ -61,6 +61,7 @@
                         <div class="col-12 mb-3"><label>Target Shifts</label><input type="number" class="form-control" id="gs-target-shifts"></div>
                         <div class="col-12 mb-3"><label>Target Variance</label><input type="number" class="form-control" id="gs-variance"></div>
                         <div class="col-12 mb-3"><label>Preferred Block Size</label><input type="number" class="form-control" id="gs-block-size"></div>
+                        <div class="col-12 mb-3"><label>Min Consecutive Nights</label><input type="number" class="form-control" id="gs-min-consecutive-nights" value="2"></div>
                     </div>
 
                     <hr class="my-4">
@@ -112,6 +113,11 @@
                                     <td>Circadian (Soft)</td>
                                     <td><input type="number" class="form-control" id="rw-circadian-soft" min="1" max="10" value="5"></td>
                                     <td><small class="text-muted">Prefer more than 1 day off when switching from Night to Day.</small></td>
+                                </tr>
+                                <tr>
+                                    <td>Min Consecutive Nights</td>
+                                    <td><input type="number" class="form-control" id="rw-min-consecutive-nights" min="1" max="10" value="5"></td>
+                                    <td><small class="text-muted">Avoid single night shifts. Prefer blocks of nights.</small></td>
                                 </tr>
                                 <tr>
                                     <td>Preferred Block Size</td>
@@ -450,10 +456,10 @@
                                 <option value="">Any Shift</option>
                             </select>
                             <div class="btn-group">
-                                <button id="req-work-btn" class="btn btn-outline-success">Work</button>
-                                <button id="req-avoid-btn" class="btn btn-outline-warning text-dark">Avoid</button>
-                                <button id="req-off-btn" class="btn btn-outline-danger">Off</button>
-                                <button id="req-clear-btn" class="btn btn-outline-secondary">Clear</button>
+                                <button id="req-work-btn" class="btn btn-outline-success" onclick="setReqMode('work')">Work</button>
+                                <button id="req-avoid-btn" class="btn btn-outline-warning text-dark" onclick="setReqMode('avoid')">Avoid</button>
+                                <button id="req-off-btn" class="btn btn-outline-danger" onclick="setReqMode('off')">Off</button>
+                                <button id="req-clear-btn" class="btn btn-outline-secondary" onclick="setReqMode('clear')">Clear</button>
                             </div>
                         </div>
                     </div>
