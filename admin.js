@@ -727,6 +727,19 @@ function renderSites() {
         tr.appendChild(tdActions);
         tbody.appendChild(tr);
     });
+    updateIntegrationsSiteSelect();
+}
+
+function updateIntegrationsSiteSelect() {
+    const sel = document.getElementById('gs-target-site');
+    if (!sel) return;
+    sel.innerHTML = '';
+    adminSites.forEach(s => {
+         const opt = document.createElement('option');
+         opt.value = s.id;
+         opt.textContent = s.name;
+         sel.appendChild(opt);
+    });
 }
 
 window.openSiteUsersModal = async (siteId) => {
@@ -769,6 +782,198 @@ window.saveSiteUsers = async () => {
         modal.hide();
     } catch(e) {
         window.showToast(e.message, 'danger');
+    }
+};
+
+// --- Google Sheet Integration ---
+
+function parseCSV(text) {
+    // Basic CSV parser that handles quotes
+    const rows = [];
+    let currentRow = [];
+    let currentVal = '';
+    let inQuote = false;
+
+    for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        const nextChar = text[i+1];
+
+        if (inQuote) {
+            if (char === '"' && nextChar === '"') {
+                currentVal += '"';
+                i++;
+            } else if (char === '"') {
+                inQuote = false;
+            } else {
+                currentVal += char;
+            }
+        } else {
+            if (char === '"') {
+                inQuote = true;
+            } else if (char === ',') {
+                currentRow.push(currentVal.trim());
+                currentVal = '';
+            } else if (char === '\n' || char === '\r') {
+                currentRow.push(currentVal.trim());
+                if (currentRow.length > 0 && (currentRow.length > 1 || currentRow[0] !== '')) {
+                     rows.push(currentRow);
+                }
+                currentRow = [];
+                currentVal = '';
+                if (char === '\r' && nextChar === '\n') i++;
+            } else {
+                currentVal += char;
+            }
+        }
+    }
+    if (currentVal || currentRow.length > 0) {
+        currentRow.push(currentVal.trim());
+        rows.push(currentRow);
+    }
+    return rows;
+}
+
+window.syncGoogleSheet = async () => {
+    const url = document.getElementById('gs-csv-url').value;
+    const siteId = document.getElementById('gs-target-site').value;
+    const statusEl = document.getElementById('gs-sync-status');
+    const statusBody = document.getElementById('gs-status-body');
+    const titleEl = document.getElementById('gs-status-title');
+
+    if (!url || !siteId) {
+        window.showToast('Please provide URL and Site', 'warning');
+        return;
+    }
+
+    statusEl.classList.remove('d-none');
+    titleEl.textContent = 'Fetching...';
+    titleEl.className = 'alert-heading fw-bold';
+    statusBody.textContent = '';
+
+    const log = (msg) => statusBody.textContent += msg + '\n';
+
+    try {
+        // 1. Fetch
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error('Failed to fetch CSV');
+        const text = await resp.text();
+
+        // 2. Parse
+        const rows = parseCSV(text);
+        if (rows.length < 3) throw new Error('CSV too short (need header rows + data)');
+
+        // 3. Map Headers
+        log(`Parsed ${rows.length} rows.`);
+
+        const headerUsers = rows[0]; // Row 1
+        const headerShifts = rows[1]; // Row 2
+
+        // Build Column Map: Index -> { userId, shiftId, isOff }
+        const colMap = [];
+
+        // Fetch Site Data
+        const [usersData, shiftsData] = await Promise.all([
+             apiClient.get('/api/users'),
+             apiClient.get(`/api/sites/${siteId}/shifts`)
+        ]);
+
+        const allUsers = usersData.users || [];
+        const allShifts = shiftsData.shifts || [];
+
+        let currentUser = null;
+        let mappingErrors = 0;
+
+        for (let i = 1; i < headerUsers.length; i++) { // Skip Col 0 (Date)
+            const uName = headerUsers[i];
+            if (uName) currentUser = uName; // Fill right logic
+
+            if (!currentUser) continue;
+
+            const sName = headerShifts[i];
+            if (!sName) continue;
+
+            // Match User
+            const user = allUsers.find(u => u.username.toLowerCase() === currentUser.toLowerCase());
+            if (!user) {
+                // Reduce log noise, only log once per missing user?
+                // log(`Warning: User '${currentUser}' not found.`);
+                continue;
+            }
+
+            // Match Shift
+            let shiftId = null;
+            let type = null;
+
+            if (sName.toUpperCase() === 'OFF') {
+                type = 'off';
+            } else {
+                const shift = allShifts.find(s => s.name.toLowerCase() === sName.toLowerCase());
+                if (!shift) {
+                    // log(`Warning: Shift '${sName}' not found.`);
+                    continue;
+                }
+                shiftId = shift.id;
+                type = 'avoid';
+            }
+
+            colMap[i] = { userId: user.id, shiftId, type };
+        }
+
+        if (colMap.length === 0) throw new Error('No valid columns mapped. Check User/Shift names.');
+        log(`Mapped ${Object.keys(colMap).length} columns.`);
+
+        // 4. Process Data
+        const requests = [];
+
+        for (let r = 2; r < rows.length; r++) { // Start Row 3
+            const row = rows[r];
+            const dateStr = row[0]; // Assume YYYY-MM-DD
+
+            // Validate Date
+            // Try standard Date parse
+            let d = new Date(dateStr);
+            if (isNaN(d.getTime())) continue;
+
+            // Ensure YYYY-MM-DD
+            const isoDate = window.toDateStr(d);
+
+            for (let c = 1; c < row.length; c++) {
+                const val = row[c];
+                const map = colMap[c];
+
+                if (map && val && val.toUpperCase() === 'TRUE') {
+                    requests.push({
+                        userId: map.userId,
+                        date: isoDate,
+                        shiftId: map.shiftId,
+                        type: map.type
+                    });
+                }
+            }
+        }
+
+        log(`Found ${requests.length} requests to import.`);
+
+        // 5. Send
+        if (requests.length > 0) {
+            titleEl.textContent = 'Syncing...';
+            const res = await apiClient.post('/api/requests/bulk-merge', { siteId, requests });
+            titleEl.textContent = 'Complete';
+            log(`Success! Added ${res.added} new requests.`);
+            if (res.added < requests.length) {
+                log(`(Skipped ${requests.length - res.added} duplicates)`);
+            }
+            window.showToast('Sync Complete', 'success');
+        } else {
+            titleEl.textContent = 'Done';
+            log('No new requests found.');
+        }
+
+    } catch (e) {
+        titleEl.textContent = 'Error';
+        titleEl.className = 'alert-heading fw-bold text-danger';
+        log(`Error: ${e.message}`);
+        console.error(e);
     }
 };
 
