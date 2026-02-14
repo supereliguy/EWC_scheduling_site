@@ -292,3 +292,71 @@ a:hover {
 .schedule-cell-assigned {
     background-color: rgba(31, 111, 235, 0.1);
 }
+
+/* --- Request Calendar New UI --- */
+.day-header {
+    text-align: right;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin-bottom: 5px;
+    cursor: pointer;
+    border-radius: 4px;
+    padding: 2px 5px;
+}
+.day-header:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+/* Day Off State */
+.calendar-day.day-off {
+    background-color: rgba(218, 54, 51, 0.15) !important; /* Dark red tint */
+    border: 1px solid #da3633 !important;
+}
+.calendar-day.day-off .day-header {
+    color: #ff7b72;
+    text-decoration: line-through;
+    font-weight: bold;
+}
+
+/* Shift Pills */
+.shift-pill {
+    background-color: #21262d;
+    border: 1px solid #30363d;
+    color: #8b949e;
+    font-size: 0.75rem;
+    padding: 2px 6px;
+    border-radius: 12px;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.1s ease;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.shift-pill:hover {
+    border-color: #8b949e;
+    color: #c9d1d9;
+}
+
+/* Work Request (Green) */
+.shift-pill.work {
+    background-color: rgba(35, 134, 54, 0.2);
+    border-color: #238636;
+    color: #7ee787;
+}
+.shift-pill.work:hover {
+    background-color: rgba(35, 134, 54, 0.4);
+}
+
+/* Avoid Request (Yellow/Orange) */
+.shift-pill.avoid {
+    background-color: rgba(158, 106, 3, 0.2); /* Orange tint */
+    border-color: #9e6a03;
+    color: #f2cc60; /* Yellow/Orange */
+}
+.shift-pill.avoid:hover {
+    background-color: rgba(158, 106, 3, 0.4);
+}

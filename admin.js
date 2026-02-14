@@ -584,6 +584,11 @@ window.populateReqShifts = async (siteId) => {
             data.shifts.forEach(s => {
                 shiftSelect.innerHTML += `<option value="${s.id}">${escapeHTML(s.name)}</option>`;
             });
+
+            // Update widget with new shifts
+            if (reqCalendarWidget && typeof reqCalendarWidget.setShifts === 'function') {
+                reqCalendarWidget.setShifts(currentReqShifts);
+            }
         }
     } catch(e) { console.error(e); }
 };
