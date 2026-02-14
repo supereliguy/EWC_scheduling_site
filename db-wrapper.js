@@ -238,6 +238,20 @@ class DBWrapper {
             console.error("Migration error (user_categories is_manual):", e);
         }
 
+        // Migration: Add fill_first to user_categories if missing
+        try {
+            const result = this.db.exec("PRAGMA table_info(user_categories)");
+            if (result.length > 0) {
+                const cols = result[0].values;
+                const hasFillFirst = cols.some(c => c[1] === 'fill_first');
+                if (!hasFillFirst) {
+                    this.db.run("ALTER TABLE user_categories ADD COLUMN fill_first INTEGER DEFAULT 0");
+                }
+            }
+        } catch(e) {
+            console.error("Migration error (user_categories fill_first):", e);
+        }
+
         // Seed Global Settings
         const globalCount = this.db.exec("SELECT COUNT(*) FROM global_settings")[0].values[0][0];
         if (globalCount === 0) {

@@ -503,14 +503,14 @@ api.get('/api/sites/:siteId/categories', (req, res) => {
 });
 
 api.post('/api/sites/:siteId/categories', (req, res) => {
-    const { name, priority, color, is_manual } = req.body;
-    window.db.prepare('INSERT INTO user_categories (site_id, name, priority, color, is_manual) VALUES (?, ?, ?, ?, ?)').run(req.params.siteId, name, priority, color || '#ffffff', is_manual ? 1 : 0);
+    const { name, priority, color, is_manual, fill_first } = req.body;
+    window.db.prepare('INSERT INTO user_categories (site_id, name, priority, color, is_manual, fill_first) VALUES (?, ?, ?, ?, ?, ?)').run(req.params.siteId, name, priority, color || '#ffffff', is_manual ? 1 : 0, fill_first ? 1 : 0);
     res.json({ message: 'Category created' });
 });
 
 api.put('/api/categories/:id', (req, res) => {
-    const { name, priority, color, is_manual } = req.body;
-    window.db.prepare('UPDATE user_categories SET name=?, priority=?, color=?, is_manual=? WHERE id=?').run(name, priority, color, is_manual ? 1 : 0, req.params.id);
+    const { name, priority, color, is_manual, fill_first } = req.body;
+    window.db.prepare('UPDATE user_categories SET name=?, priority=?, color=?, is_manual=?, fill_first=? WHERE id=?').run(name, priority, color, is_manual ? 1 : 0, fill_first ? 1 : 0, req.params.id);
     res.json({ message: 'Category updated' });
 });
 

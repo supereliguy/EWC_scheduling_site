@@ -106,7 +106,8 @@ const fetchScheduleContext = ({ siteId, startDate, days }) => {
         SELECT u.id, u.username, u.role,
                COALESCE(cat.priority, 10) as category_priority,
                cat.name as category_name,
-               COALESCE(cat.is_manual, 0) as is_manual
+               COALESCE(cat.is_manual, 0) as is_manual,
+               COALESCE(cat.fill_first, 0) as fill_first
         FROM users u
         JOIN site_users su ON u.id = su.user_id
         LEFT JOIN user_categories cat ON su.category_id = cat.id
@@ -889,7 +890,12 @@ const runGreedy = ({
                 }
             });
 
-            candidates.sort((a, b) => b.score - a.score);
+            candidates.sort((a, b) => {
+                const fillA = a.user.fill_first ? 1 : 0;
+                const fillB = b.user.fill_first ? 1 : 0;
+                if (fillA !== fillB) return fillB - fillA; // Fill First users first
+                return b.score - a.score;
+            });
 
             if (candidates.length > 0) {
                 const selected = candidates[0];

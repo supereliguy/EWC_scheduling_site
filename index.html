@@ -141,16 +141,16 @@
                     <h3>Manage Users</h3>
                     <div class="input-group mb-3">
                         <input type="text" class="form-control" id="new-username" placeholder="Username">
-                        <select class="form-select" id="new-role" style="max-width: 120px;">
-                            <option value="user">User</option>
-                            <option value="admin">Admin</option>
+                        <select class="form-select" id="new-role" style="max-width: 160px;" title="System Access Level">
+                            <option value="user">User Access</option>
+                            <option value="admin">Admin Access</option>
                         </select>
                         <button class="btn btn-primary" id="create-user-btn">Create</button>
                         <button class="btn btn-secondary ms-2" onclick="openBulkModal('users')">Bulk Add</button>
                         <button class="btn btn-info ms-2" onclick="openBulkMetricsModal()">Bulk Metrics</button>
                     </div>
                     <table class="table table-bordered" id="users-table">
-                        <thead><tr><th>ID</th><th>Username</th><th>Role</th><th>Actions</th></tr></thead>
+                        <thead><tr><th>ID</th><th>Username</th><th>System Access</th><th>Actions</th></tr></thead>
                         <tbody></tbody>
                     </table>
                 </div>
@@ -212,7 +212,7 @@
                     <ul class="nav nav-tabs mb-3">
                         <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#sd-schedule">Schedule</a></li>
                         <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#sd-users">Users</a></li>
-                        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#sd-categories">Categories</a></li>
+                        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#sd-categories">Roles</a></li>
                         <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#sd-stats">Stats</a></li>
                         <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#sd-settings">Settings</a></li>
                     </ul>
@@ -278,15 +278,19 @@
                             <div id="site-users-list"></div>
                         </div>
 
-                        <!-- Categories -->
+                        <!-- Roles (Categories) -->
                         <div class="tab-pane fade" id="sd-categories">
                             <div class="d-flex justify-content-between align-items-center mb-3">
-                                <h4>User Categories</h4>
-                                <button class="btn btn-primary" onclick="openCategoryModal()">Add Category</button>
+                                <h4>Staff Roles</h4>
+                                <button class="btn btn-primary" onclick="openCategoryModal()">Add Role</button>
                             </div>
-                            <p class="text-muted small">Lower priority number means higher importance (e.g. 1 is more important than 10). Higher importance users are prioritized during conflict resolution. "Manual" categories are skipped by the auto-scheduler.</p>
+                            <p class="text-muted small">
+                                Define roles for your staff.
+                                <strong>Priority:</strong> Lower number = Higher Importance.
+                                <strong>Fill First:</strong> Prioritize filling these users' requested shifts before others (Backfill).
+                            </p>
                             <table class="table table-bordered" id="categories-table">
-                                <thead><tr><th>Priority</th><th>Name</th><th>Color</th><th>Manual Only</th><th>Actions</th></tr></thead>
+                                <thead><tr><th>Priority</th><th>Name</th><th>Color</th><th>Flags</th><th>Actions</th></tr></thead>
                                 <tbody></tbody>
                             </table>
                         </div>
@@ -484,19 +488,28 @@
         </div>
     </div>
 
-    <!-- Category Modal -->
+    <!-- Role Modal -->
     <div class="modal fade" id="categoryModal" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">
-                <div class="modal-header"><h5 class="modal-title">Edit Category</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-header"><h5 class="modal-title">Edit Role</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                 <div class="modal-body">
                     <input type="hidden" id="cat-id">
                     <div class="mb-3"><label>Name</label><input type="text" class="form-control" id="cat-name"></div>
                     <div class="mb-3"><label>Priority (Lower number = Higher Importance)</label><input type="number" class="form-control" id="cat-priority" value="10"></div>
                     <div class="mb-3"><label>Color</label><input type="color" class="form-control form-control-color" id="cat-color" value="#ffffff"></div>
+
+                    <hr>
+                    <h6>Configuration</h6>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="cat-fill-first">
+                        <label class="form-check-label fw-bold" for="cat-fill-first">Fill First / Core Staff</label>
+                        <div class="form-text small mt-0">Ensures these users get their requested shifts filled before backfill staff.</div>
+                    </div>
                     <div class="form-check mb-3">
                         <input class="form-check-input" type="checkbox" id="cat-is-manual">
-                        <label class="form-check-label" for="cat-is-manual">Manual Assignments Only (Skip Auto-Schedule)</label>
+                        <label class="form-check-label" for="cat-is-manual">Manual Assignments Only</label>
+                        <div class="form-text small mt-0">Skip this role during auto-scheduling.</div>
                     </div>
                 </div>
                 <div class="modal-footer">
