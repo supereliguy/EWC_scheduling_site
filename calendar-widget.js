@@ -111,7 +111,7 @@ class CalendarWidget {
                 if (req) {
                     if (req.type === 'work') pill.classList.add('work');
                     else if (req.type === 'avoid') pill.classList.add('avoid');
-                    else if (req.type === 'off') pill.classList.add('avoid'); // Treat specific off as avoid/block
+                    else if (req.type === 'off') pill.classList.add('off');
                 }
 
                 list.appendChild(pill);
@@ -188,7 +188,7 @@ class CalendarWidget {
         let targetType = null;
         if (mode === 'work') targetType = 'work';
         else if (mode === 'avoid') targetType = 'avoid';
-        else if (mode === 'off') targetType = 'avoid'; // Off tool on shift = Avoid
+        else if (mode === 'off') targetType = 'off';
         else if (mode === 'clear') targetType = null;
 
         // Find existing request for this shift

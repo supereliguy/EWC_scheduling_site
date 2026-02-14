@@ -290,7 +290,13 @@ const checkConstraints = (u, shift, dateStr, dateObj, state, settings, req, rule
 
     // 0. Request Off
     if (req && req.type === 'off') {
-        if (w.request_off >= 10) return { valid: false, reason: 'Requested Off' };
+        if (req.shift_id) {
+            if (req.shift_id === shift.id) {
+                if (w.request_off >= 10) return { valid: false, reason: 'Requested Off' };
+            }
+        } else {
+            if (w.request_off >= 10) return { valid: false, reason: 'Requested Off' };
+        }
         // If soft, we handle penalty in score, but here it's valid
     }
 
@@ -375,7 +381,13 @@ const calculateScore = (u, shift, dateObj, state, settings, req, site, ruleWeigh
 
     // Request Off
     if (req && req.type === 'off') {
-        score += getPenalty(w.request_off);
+        if (req.shift_id) {
+            if (req.shift_id === shift.id) {
+                score += getPenalty(w.request_off);
+            }
+        } else {
+            score += getPenalty(w.request_off);
+        }
     }
 
     // Request Avoid Shift

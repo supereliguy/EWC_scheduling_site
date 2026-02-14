@@ -360,3 +360,13 @@ a:hover {
 .shift-pill.avoid:hover {
     background-color: rgba(158, 106, 3, 0.4);
 }
+
+/* Off Request (Red) */
+.shift-pill.off {
+    background-color: rgba(218, 54, 51, 0.2); /* Red tint */
+    border-color: #da3633;
+    color: #ff7b72;
+}
+.shift-pill.off:hover {
+    background-color: rgba(218, 54, 51, 0.4);
+}
