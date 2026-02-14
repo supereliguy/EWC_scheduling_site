@@ -581,6 +581,27 @@ api.post('/api/requests', (req, res) => {
     res.json({ message: 'Requests saved' });
 });
 
+api.post('/api/requests/bulk-merge', (req, res) => {
+    const { siteId, requests } = req.body;
+    let addedCount = 0;
+
+    window.db.transaction(() => {
+        const checkStmt = window.db.prepare('SELECT 1 FROM requests WHERE site_id=? AND user_id=? AND date=?');
+        const insertStmt = window.db.prepare('INSERT INTO requests (site_id, user_id, date, type, shift_id) VALUES (?,?,?,?,?)');
+
+        requests.forEach(r => {
+            const exists = checkStmt.get(siteId, r.userId, r.date);
+            if (!exists) {
+                if (r.type) {
+                     insertStmt.run(siteId, r.userId, r.date, r.type, r.shiftId || null);
+                     addedCount++;
+                }
+            }
+        });
+    })();
+    res.json({ message: 'Bulk merge complete', added: addedCount });
+});
+
 
 // Snapshots
 api.get('/api/snapshots', (req, res) => {
