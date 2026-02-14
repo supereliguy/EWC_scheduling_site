@@ -839,8 +839,19 @@ function parseCSV(text) {
 }
 
 window.syncGoogleSheet = async () => {
-    const url = document.getElementById('gs-csv-url').value;
+    let url = document.getElementById('gs-csv-url').value;
     const siteId = document.getElementById('gs-target-site').value;
+
+    // Auto-fix Google Sheet "Publish to Web" HTML links
+    if (url && url.includes('/pubhtml')) {
+        url = url.replace(/\/pubhtml/, '/pub');
+        if (url.includes('?')) {
+             if (!url.includes('output=')) url += '&output=csv';
+        } else {
+             url += '?output=csv';
+        }
+    }
+
     const statusEl = document.getElementById('gs-sync-status');
     const statusBody = document.getElementById('gs-status-body');
     const titleEl = document.getElementById('gs-status-title');
