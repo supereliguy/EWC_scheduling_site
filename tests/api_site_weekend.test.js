@@ -39,11 +39,11 @@ describe('Site Weekend Configuration API', () => {
 
         expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('UPDATE sites'));
 
-        // args: name, desc, ws_day, ws_time, we_day, we_time, id
-        // Note: undefined matches undefined in toHaveBeenCalledWith
+        // args: name, desc, google_sheet_url, ws_day, ws_time, we_day, we_time, id
         expect(runSpy).toHaveBeenCalledWith(
             undefined,
             undefined,
+            undefined, // google_sheet_url
             5,
             '21:00',
             0,
@@ -68,6 +68,7 @@ describe('Site Weekend Configuration API', () => {
         expect(runSpy).toHaveBeenCalledWith(
             'New Name',
             'New Desc',
+            undefined, // google_sheet_url
             undefined,
             undefined,
             undefined,

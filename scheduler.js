@@ -594,11 +594,11 @@ const isHardConstraint = (r, ruleWeights) => {
     return false;
 };
 
-const validateSchedule = ({ siteId, startDate, days, assignments: providedAssignments }) => {
+const validateSchedule = ({ siteId, startDate, days, assignments: providedAssignments, context }) => {
     // 1. Fetch Context
-    const ctx = fetchScheduleContext({ siteId, startDate, days });
+    const ctx = context || fetchScheduleContext({ siteId, startDate, days });
     const assignments = providedAssignments || ctx.currentAssignments;
-    const ruleWeights = ctx.ruleWeights;
+    const ruleWeights = ctx.ruleWeights || {};
 
     // Report Object
     const report = {}; // userId -> { status, issues: [] }
@@ -738,7 +738,22 @@ const validateSchedule = ({ siteId, startDate, days, assignments: providedAssign
             // We need to know if it *would* have failed.
             // So let's run checkConstraints with ALL weights set to 10 to detect the violation,
             // then classify it based on actual weight.
-            const strictWeights = { max_consecutive: 10, min_days_off: 10, target_variance: 10, availability: 10, request_off: 10, circadian_strict: 10, min_rest_hours: 10 };
+            const strictWeights = {
+                max_consecutive: 10,
+                min_days_off: 10,
+                target_variance: 10,
+                availability: 10,
+                request_off: 10,
+                circadian_strict: 10,
+                min_rest_hours: 10,
+                request_avoid_shift: 10, // Ensure avoid requests are checked
+                request_work_specific: 10,
+                request_work: 10,
+                circadian_soft: 10,
+                min_consecutive_nights: 10,
+                block_size: 10,
+                weekend_fairness: 10
+            };
             const check = checkConstraints(u, shift, dateStr, dateObj, state, settings, req, strictWeights);
 
             if (!check.valid) {
@@ -779,6 +794,25 @@ const validateSchedule = ({ siteId, startDate, days, assignments: providedAssign
             }
         });
     }
+
+    // 3. Final Check: Under-scheduling
+    ctx.users.forEach(u => {
+        const state = userState[u.id];
+        const settings = ctx.userSettings[u.id];
+        const target = settings.target_shifts || 0;
+        const variance = settings.target_variance || 0;
+        const minShifts = Math.max(0, target - variance);
+
+        if (state.totalAssigned < minShifts) {
+             report[u.id].issues.push({
+                date: 'All',
+                type: 'warning', // Treat as warning (soft), unless strict policy needed
+                reason: `Under Target Shifts (${state.totalAssigned} < ${minShifts})`,
+                shift: 'General'
+            });
+            if (report[u.id].status !== 'error') report[u.id].status = 'warning';
+        }
+    });
 
     return report;
 };
@@ -991,12 +1025,13 @@ const runGreedy = ({
                 updateState(selected.user.id, dateObj, shift, true);
             } else {
                 if (forceMode) {
-                    const sacrificeCandidates = users.filter(u => !assignedToday.has(u.id)).map(u => {
+                    // Manual Users should NOT be candidates for sacrifice
+                    const sacrificeCandidates = users.filter(u => !assignedToday.has(u.id) && !u.is_manual).map(u => {
                         const state = userState[u.id];
                         const settings = userSettings[u.id];
                         const req = requestsMap[dateStr] ? requestsMap[dateStr][u.id] : undefined;
                         // Use strict weights (all 10) to find the reason for failure
-                        const strictWeights = { max_consecutive: 10, min_days_off: 10, target_variance: 10, availability: 10, request_off: 10, circadian_strict: 10, min_rest_hours: 10 };
+                        const strictWeights = { max_consecutive: 10, min_days_off: 10, target_variance: 10, availability: 10, request_off: 10, circadian_strict: 10, min_rest_hours: 10, request_avoid_shift: 10 };
                         const check = checkConstraints(u, shift, dateStr, dateObj, state, settings, req, strictWeights);
                         return {
                             user: u,

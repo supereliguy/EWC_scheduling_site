@@ -24,7 +24,9 @@ describe('validateSchedule', () => {
         const shifts = [{ id: 10, name: 'Day', start_time: '08:00', end_time: '16:00', required_staff: 1, days_of_week: '0,1,2,3,4,5,6' }];
         const userSettings = [{
             user_id: 1,
-            availability_rules: JSON.stringify({ blocked_shifts: [10], blocked_days: [] })
+            availability_rules: JSON.stringify({ blocked_shifts: [10], blocked_days: [] }),
+            target_shifts: 1, // Set target=1 to avoid "Under Target" warning
+            target_shifts_variance: 0
         }];
 
         // Assignments provided to validate
@@ -47,6 +49,10 @@ describe('validateSchedule', () => {
         const report = scheduler.validateSchedule({ siteId, startDate, days, assignments });
 
         expect(report[1]).toBeDefined();
+
+        // Debug
+        if(report[1].issues.length > 1) console.log(report[1].issues);
+
         expect(report[1].status).toBe('error');
         expect(report[1].issues.length).toBe(1);
         expect(report[1].issues[0].type).toBe('hard');
@@ -62,7 +68,9 @@ describe('validateSchedule', () => {
         const shifts = [{ id: 10, name: 'Day', start_time: '08:00', end_time: '16:00', required_staff: 1, days_of_week: '0,1,2,3,4,5,6' }];
         const userSettings = [{
             user_id: 1,
-            max_consecutive_shifts: 1 // Only 1 day allowed
+            max_consecutive_shifts: 1,
+            target_shifts: 4,
+            target_shifts_variance: 2
         }];
 
         mockDB.prepare.mockImplementation((query) => {
@@ -97,10 +105,12 @@ describe('validateSchedule', () => {
         const report = scheduler.validateSchedule({ siteId, startDate, days, assignments });
 
         expect(report[1]).toBeDefined();
+        // Expect warning for max consecutive
         expect(report[1].status).toBe('warning');
-        expect(report[1].issues.length).toBe(1);
-        expect(report[1].issues[0].type).toBe('soft');
-        expect(report[1].issues[0].reason).toContain('Max Consecutive');
+
+        const consecutiveIssue = report[1].issues.find(i => i.reason.includes('Max Consecutive'));
+        expect(consecutiveIssue).toBeDefined();
+        expect(consecutiveIssue.type).toBe('soft');
     });
 
     test('should pass with no violations', () => {
@@ -111,6 +121,14 @@ describe('validateSchedule', () => {
         const users = [{ id: 1, username: 'User1', role: 'user', category_priority: 10 }];
         const shifts = [{ id: 10, name: 'Day', start_time: '08:00', end_time: '16:00', required_staff: 1, days_of_week: '0,1,2,3,4,5,6' }];
 
+        // Target: 2. Variance: 1. Min: 1. Assigned: 1. OK.
+        // Over Target: 1 >= 2? No. OK.
+        const userSettings = [{
+            user_id: 1,
+            target_shifts: 2,
+            target_shifts_variance: 1
+        }];
+
         mockDB.prepare.mockImplementation((query) => {
             const ret = {
                 all: () => [],
@@ -118,6 +136,8 @@ describe('validateSchedule', () => {
             };
             if (query.includes('FROM users')) ret.all = () => users;
             if (query.includes('FROM shifts')) ret.all = () => shifts;
+            if (query.includes('FROM user_settings')) ret.all = () => userSettings;
+            if (query.includes('FROM global_settings')) ret.all = () => []; // Defaults
             return ret;
         });
 
