@@ -429,6 +429,7 @@ window.loadGlobalSettings = async (btn) => {
         document.getElementById('gs-variance').value = s.target_shifts_variance || 2;
         document.getElementById('gs-block-size').value = s.preferred_block_size || 3;
         document.getElementById('gs-min-consecutive-nights').value = s.min_consecutive_nights || 2;
+        document.getElementById('gs-min-rest-hours').value = s.min_rest_hours || 10;
 
         // Weights
         document.getElementById('rw-availability').value = s.rule_weight_availability || 10;
@@ -437,6 +438,7 @@ window.loadGlobalSettings = async (btn) => {
         document.getElementById('rw-min-days-off').value = s.rule_weight_min_days_off || 10;
         document.getElementById('rw-target-variance').value = s.rule_weight_target_variance || 10;
         document.getElementById('rw-circadian-strict').value = s.rule_weight_circadian_strict || 10;
+        document.getElementById('rw-min-rest-hours').value = s.rule_weight_min_rest_hours || 10;
         document.getElementById('rw-circadian-soft').value = s.rule_weight_circadian_soft || 5;
         document.getElementById('rw-min-consecutive-nights').value = s.rule_weight_min_consecutive_nights || 5;
         document.getElementById('rw-block-size').value = s.rule_weight_block_size || 5;
@@ -455,6 +457,7 @@ window.saveGlobalSettings = async () => {
         target_shifts_variance: document.getElementById('gs-variance').value,
         preferred_block_size: document.getElementById('gs-block-size').value,
         min_consecutive_nights: document.getElementById('gs-min-consecutive-nights').value,
+        min_rest_hours: document.getElementById('gs-min-rest-hours').value,
         night_preference: 1.0,
 
         // Weights
@@ -464,6 +467,7 @@ window.saveGlobalSettings = async () => {
         rule_weight_min_days_off: document.getElementById('rw-min-days-off').value,
         rule_weight_target_variance: document.getElementById('rw-target-variance').value,
         rule_weight_circadian_strict: document.getElementById('rw-circadian-strict').value,
+        rule_weight_min_rest_hours: document.getElementById('rw-min-rest-hours').value,
         rule_weight_circadian_soft: document.getElementById('rw-circadian-soft').value,
         rule_weight_min_consecutive_nights: document.getElementById('rw-min-consecutive-nights').value,
         rule_weight_block_size: document.getElementById('rw-block-size').value,
