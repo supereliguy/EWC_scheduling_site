@@ -134,7 +134,8 @@ const fetchScheduleContext = ({ siteId, startDate, days }) => {
         weekend_fairness: parseInt(globalSettings.rule_weight_weekend_fairness) || 5,
         request_work_specific: parseInt(globalSettings.rule_weight_request_work_specific) || 10,
         request_avoid_shift: parseInt(globalSettings.rule_weight_request_avoid_shift) || 10,
-        request_work: parseInt(globalSettings.rule_weight_request_work) || 10
+        request_work: parseInt(globalSettings.rule_weight_request_work) || 10,
+        min_rest_hours: parseInt(globalSettings.rule_weight_min_rest_hours) || 10 // New weight for min rest
     };
 
     const g = {
@@ -144,7 +145,8 @@ const fetchScheduleContext = ({ siteId, startDate, days }) => {
         night_pref: parseFloat(globalSettings.night_preference) || 1.0,
         target_shifts: parseInt(globalSettings.target_shifts) || 20,
         target_variance: parseInt(globalSettings.target_shifts_variance) || 2,
-        preferred_block_size: parseInt(globalSettings.preferred_block_size) || 3
+        preferred_block_size: parseInt(globalSettings.preferred_block_size) || 3,
+        min_rest_hours: parseFloat(globalSettings.min_rest_hours) || 10.0 // Default 10 hours
     };
 
     const userSettings = {};
@@ -167,6 +169,7 @@ const fetchScheduleContext = ({ siteId, startDate, days }) => {
             preferred_block_size: s.preferred_block_size !== undefined ? s.preferred_block_size : g.preferred_block_size,
             shift_ranking: shiftRanking,
             no_preference: !!s.no_preference, // New flag
+            min_rest_hours: g.min_rest_hours, // Global only
             availability
         };
     });
@@ -285,7 +288,8 @@ const checkConstraints = (u, shift, dateStr, dateObj, state, settings, req, rule
         target_variance: 10,
         availability: 10,
         request_off: 10,
-        circadian_strict: 10
+        circadian_strict: 10,
+        min_rest_hours: 10
     };
 
     // 0. Request Off
@@ -337,7 +341,7 @@ const checkConstraints = (u, shift, dateStr, dateObj, state, settings, req, rule
         if (w.max_consecutive >= 10) return { valid: false, reason: `Max Consecutive Shifts (${settings.max_consecutive})` };
     }
 
-    // 2. Strict Circadian (Night -> Day gap)
+    // 2. Strict Circadian (Night -> Day gap) - KEEPING for backward compat, but Min Rest Hours supersedes it mostly
     if (state.lastShift && isNightShift(state.lastShift) && !isNightShift(shift)) {
         const gapDays = (dateObj - state.lastDate) / (1000 * 60 * 60 * 24);
         if (gapDays <= 1.1) {
@@ -350,6 +354,33 @@ const checkConstraints = (u, shift, dateStr, dateObj, state, settings, req, rule
         // If we are currently in a night streak (implied by consecutiveNights > 0, meaning yesterday was Night)
         if (state.consecutiveNights > 0 && state.consecutiveNights < settings.min_consecutive_nights) {
              if (w.min_consecutive_nights >= 10) return { valid: false, reason: `Min Consecutive Nights (${state.consecutiveNights}/${settings.min_consecutive_nights})` };
+        }
+    }
+
+    // 4. Min Rest Hours
+    if (state.lastShift && shift.start_time && shift.end_time) {
+        const minRest = settings.min_rest_hours || 10;
+
+        // Calculate End of Last Shift
+        const [lastEndH, lastEndM] = state.lastShift.end_time.split(':').map(Number);
+        const [lastStartH] = state.lastShift.start_time.split(':').map(Number);
+        const lastEnd = new Date(state.lastDate);
+        lastEnd.setHours(lastEndH, lastEndM, 0, 0);
+        // If end time < start time, it ends next day
+        if (lastEndH < lastStartH) {
+             lastEnd.setDate(lastEnd.getDate() + 1);
+        }
+
+        // Calculate Start of Current Shift
+        const [currStartH, currStartM] = shift.start_time.split(':').map(Number);
+        const currStart = new Date(dateObj);
+        currStart.setHours(currStartH, currStartM, 0, 0);
+
+        const gapMs = currStart - lastEnd;
+        const gapHours = gapMs / (1000 * 60 * 60);
+
+        if (gapHours < minRest) {
+             if (w.min_rest_hours >= 10) return { valid: false, reason: `Inadequate Rest (${gapHours.toFixed(1)}h < ${minRest}h)` };
         }
     }
 
@@ -370,7 +401,8 @@ const calculateScore = (u, shift, dateObj, state, settings, req, site, ruleWeigh
         weekend_fairness: 5,
         request_work_specific: 10,
         request_avoid_shift: 10,
-        request_work: 10
+        request_work: 10,
+        min_rest_hours: 10
     };
 
     // Calculate penalty helper: (weight * -1000)
@@ -421,6 +453,26 @@ const calculateScore = (u, shift, dateObj, state, settings, req, site, ruleWeigh
         const gapDays = (dateObj - state.lastDate) / (1000 * 60 * 60 * 24);
         if (gapDays <= 1.1) {
              score += getPenalty(w.circadian_strict);
+        }
+    }
+
+    // Min Rest Hours
+    if (state.lastShift && shift.start_time && shift.end_time) {
+        const minRest = settings.min_rest_hours || 10;
+
+        const [lastEndH, lastEndM] = state.lastShift.end_time.split(':').map(Number);
+        const [lastStartH] = state.lastShift.start_time.split(':').map(Number);
+        const lastEnd = new Date(state.lastDate);
+        lastEnd.setHours(lastEndH, lastEndM, 0, 0);
+        if (lastEndH < lastStartH) lastEnd.setDate(lastEnd.getDate() + 1);
+
+        const [currStartH, currStartM] = shift.start_time.split(':').map(Number);
+        const currStart = new Date(dateObj);
+        currStart.setHours(currStartH, currStartM, 0, 0);
+
+        const gapHours = (currStart - lastEnd) / (1000 * 60 * 60);
+        if (gapHours < minRest) {
+            score += getPenalty(w.min_rest_hours);
         }
     }
 
@@ -526,7 +578,8 @@ const isHardConstraint = (r, ruleWeights) => {
         availability: 10,
         request_off: 10,
         circadian_strict: 10,
-        request_avoid_shift: 10
+        request_avoid_shift: 10,
+        min_rest_hours: 10
     };
 
     if (!r) return false;
@@ -536,6 +589,7 @@ const isHardConstraint = (r, ruleWeights) => {
     if (r.includes('Max Shifts') && w.target_variance >= 10) return true;
     if (r.includes('Max Consecutive') && w.max_consecutive >= 10) return true;
     if (r.includes('Inadequate Rest') && w.circadian_strict >= 10) return true;
+    if (r.includes('Inadequate Rest') && w.min_rest_hours >= 10) return true; // Catch all rest violations
 
     return false;
 };
@@ -684,7 +738,7 @@ const validateSchedule = ({ siteId, startDate, days, assignments: providedAssign
             // We need to know if it *would* have failed.
             // So let's run checkConstraints with ALL weights set to 10 to detect the violation,
             // then classify it based on actual weight.
-            const strictWeights = { max_consecutive: 10, min_days_off: 10, target_variance: 10, availability: 10, request_off: 10, circadian_strict: 10 };
+            const strictWeights = { max_consecutive: 10, min_days_off: 10, target_variance: 10, availability: 10, request_off: 10, circadian_strict: 10, min_rest_hours: 10 };
             const check = checkConstraints(u, shift, dateStr, dateObj, state, settings, req, strictWeights);
 
             if (!check.valid) {
@@ -942,7 +996,7 @@ const runGreedy = ({
                         const settings = userSettings[u.id];
                         const req = requestsMap[dateStr] ? requestsMap[dateStr][u.id] : undefined;
                         // Use strict weights (all 10) to find the reason for failure
-                        const strictWeights = { max_consecutive: 10, min_days_off: 10, target_variance: 10, availability: 10, request_off: 10, circadian_strict: 10 };
+                        const strictWeights = { max_consecutive: 10, min_days_off: 10, target_variance: 10, availability: 10, request_off: 10, circadian_strict: 10, min_rest_hours: 10 };
                         const check = checkConstraints(u, shift, dateStr, dateObj, state, settings, req, strictWeights);
                         return {
                             user: u,
@@ -995,7 +1049,7 @@ const runGreedy = ({
                          const settings = userSettings[u.id];
                          const req = requestsMap[dateStr] ? requestsMap[dateStr][u.id] : undefined;
                          // Check strictly to show why they failed
-                         const strictWeights = { max_consecutive: 10, min_days_off: 10, target_variance: 10, availability: 10, request_off: 10, circadian_strict: 10 };
+                         const strictWeights = { max_consecutive: 10, min_days_off: 10, target_variance: 10, availability: 10, request_off: 10, circadian_strict: 10, min_rest_hours: 10 };
                          const check = checkConstraints(u, shift, dateStr, dateObj, state, settings, req, strictWeights);
                          return { username: u.username, reason: check.reason };
                     });

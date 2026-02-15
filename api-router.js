@@ -372,7 +372,9 @@ api.get('/api/schedule', (req, res) => {
 
     if (startDate && days) {
         startStr = startDate;
-        const start = new Date(startDate);
+        // Parse explicitly as YYYY-MM-DD local to avoid UTC shifts
+        const [y, m, d] = startDate.split('-').map(Number);
+        const start = new Date(y, m - 1, d);
         const end = new Date(start);
         end.setDate(start.getDate() + parseInt(days) - 1);
         // Use shared helper
