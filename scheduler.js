@@ -1,3 +1,9 @@
+/**
+ * Ultimate Scheduler
+ * Copyright (c) 2024 Elijah Wyatt. All rights reserved.
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ */
+
 // scheduler.js - Converted to ES Module-like syntax for browser, using global 'db' object
 
 const toDateStr = (d) => {

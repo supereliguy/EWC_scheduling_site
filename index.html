@@ -277,6 +277,15 @@
                                     <button class="btn btn-secondary" onclick="openSnapshotsModal()" title="View or restore past schedule versions">History</button>
         <div class="dropdown ms-2">
             <button class="btn btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                Export
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li><button class="dropdown-item" onclick="exportScheduleCSV()">Export to CSV</button></li>
+                <li><button class="dropdown-item" onclick="exportSchedulePDF()">Export to PDF</button></li>
+            </ul>
+        </div>
+        <div class="dropdown ms-2">
+            <button class="btn btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
                 Actions
             </button>
             <ul class="dropdown-menu dropdown-menu-end">
@@ -387,6 +396,10 @@
             </div>
         </div>
     </div>
+
+    <footer class="text-center py-4 text-muted border-top mt-5 bg-white">
+        <p class="mb-0">&copy; 2024 Elijah Wyatt. All rights reserved.</p>
+    </footer>
 
     <!-- Conflict Modal -->
     <div class="modal fade" id="conflictModal" tabindex="-1" data-bs-backdrop="static">
@@ -645,6 +658,9 @@
 
     <!-- SQL.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+    <!-- jsPDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 

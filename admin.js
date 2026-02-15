@@ -1,3 +1,9 @@
+/**
+ * Ultimate Scheduler
+ * Copyright (c) 2024 Elijah Wyatt. All rights reserved.
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ */
+
 const apiClient = {
     get: (url) => window.api.request('GET', url).then(r => { if(r.error) throw new Error(r.error); return r; }),
     post: (url, data) => window.api.request('POST', url, data).then(r => { if(r.error) throw new Error(r.error); return r; }),
@@ -50,6 +56,7 @@ window.showToast = (message, type = 'info') => {
 let users = [];
 let adminSites = []; // rename to avoid conflict with dashboard sites
 let shifts = [];
+let currentScheduleCache = null;
 
 // Init called by index.html script block, but we can also auto-run since it's loaded late
 window.loadUsers = loadUsers;
@@ -1347,6 +1354,8 @@ async function loadSchedule() {
     const shifts = shiftsData.shifts || [];
     const siteUsers = usersData.users || [];
 
+    currentScheduleCache = { assignments, requests, shifts, siteUsers, params };
+
     const display = document.getElementById('schedule-display');
     display.innerHTML = ''; // clear
 
@@ -2281,4 +2290,102 @@ window.saveBulkMetrics = async () => {
     } catch (e) {
         window.showToast(e.message, 'danger');
     }
+};
+
+// --- Export Functions ---
+
+window.exportScheduleCSV = () => {
+    if (!currentScheduleCache) {
+        window.showToast('No schedule loaded to export.', 'warning');
+        return;
+    }
+    const { assignments, shifts, params } = currentScheduleCache;
+    const daysCount = parseInt(params.days);
+    const [y, m, d] = params.startDate.split('-').map(Number);
+    const startObj = new Date(y, m-1, d);
+
+    // Header
+    let csv = 'Date,' + shifts.map(s => `"${s.name.replace(/"/g, '""')}"`).join(',') + '\n';
+
+    // Rows
+    for(let i=0; i<daysCount; i++) {
+        const date = new Date(startObj);
+        date.setDate(startObj.getDate() + i);
+        // Use local format for filename, but internal toDateStr for matching
+        const dateStr = window.toDateStr(date);
+
+        let row = `"${date.getMonth()+1}/${date.getDate()}",`;
+
+        const rowValues = shifts.map(s => {
+            const shiftAssigns = assignments.filter(a => a.date === dateStr && a.shift_id === s.id);
+            const names = shiftAssigns.map(a => a.username).join(', ');
+            return `"${names.replace(/"/g, '""')}"`;
+        });
+
+        row += rowValues.join(',');
+        csv += row + '\n';
+    }
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `schedule_${params.startDate}.csv`;
+    a.click();
+};
+
+window.exportSchedulePDF = () => {
+    if (!currentScheduleCache) {
+        window.showToast('No schedule loaded to export.', 'warning');
+        return;
+    }
+    const { assignments, shifts, params } = currentScheduleCache;
+    const daysCount = parseInt(params.days);
+    const [y, m, d] = params.startDate.split('-').map(Number);
+    const startObj = new Date(y, m-1, d);
+
+    if (!window.jspdf) {
+        window.showToast('PDF library not loaded.', 'danger');
+        return;
+    }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'landscape' });
+
+    // Title
+    doc.setFontSize(18);
+    const siteName = document.getElementById('sd-site-name').textContent;
+    doc.text(`Schedule: ${siteName} (${params.startDate})`, 14, 22);
+
+    // Columns
+    const head = [['Date', ...shifts.map(s => s.name)]];
+
+    // Rows
+    const body = [];
+    for(let i=0; i<daysCount; i++) {
+        const date = new Date(startObj);
+        date.setDate(startObj.getDate() + i);
+        const dateStr = window.toDateStr(date);
+        const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
+
+        const row = [`${date.getMonth()+1}/${date.getDate()} (${dayName})`];
+
+        shifts.forEach(s => {
+            const shiftAssigns = assignments.filter(a => a.date === dateStr && a.shift_id === s.id);
+            const names = shiftAssigns.map(a => a.username).join(', ');
+            row.push(names);
+        });
+        body.push(row);
+    }
+
+    doc.autoTable({
+        head: head,
+        body: body,
+        startY: 30,
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [22, 27, 34] }, // Dark header
+        theme: 'grid'
+    });
+
+    doc.save(`schedule_${params.startDate}.pdf`);
 };
