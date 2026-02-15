@@ -386,6 +386,10 @@
 
             </div>
         </div>
+
+        <footer class="text-center py-3 mt-4 border-top text-muted small">
+            &copy; Elijah Wyatt, MD
+        </footer>
     </div>
 
     <!-- Conflict Modal -->
@@ -580,8 +584,8 @@
                 </div>
                 <div class="modal-body">
                     <p class="text-muted small">
-                        Edit user metrics below. You can copy columns from Excel and paste them into the input fields.
-                        Pasting multiple lines into an input will attempt to fill subsequent rows.
+                        Edit user metrics below. You can copy columns from Excel and paste them into the input fields.<br>
+                        <strong>Column Order:</strong> Target Shifts &rarr; Max Variance &rarr; Ideal Block Size &rarr; Max Consecutive &rarr; Min Days Off
                     </p>
                     <div style="max-height: 600px; overflow-y: auto;">
                         <table class="table table-sm table-bordered table-striped" id="bulk-metrics-table">
@@ -589,10 +593,10 @@
                                 <tr>
                                     <th>Username</th>
                                     <th>Target Shifts</th>
+                                    <th>Max Variance</th>
+                                    <th>Ideal Block Size</th>
                                     <th>Max Consecutive</th>
                                     <th>Min Days Off</th>
-                                    <th>Variance</th>
-                                    <th>Block Size</th>
                                 </tr>
                             </thead>
                             <tbody></tbody>

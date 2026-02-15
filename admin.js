@@ -745,6 +745,17 @@ function updateIntegrationsSiteSelect() {
          opt.textContent = s.name;
          sel.appendChild(opt);
     });
+
+    sel.onchange = () => {
+        const sId = parseInt(sel.value);
+        const site = adminSites.find(s => s.id === sId);
+        if (site) {
+             document.getElementById('gs-csv-url').value = site.google_sheet_url || '';
+        }
+    };
+
+    // Trigger initial population
+    if (adminSites.length > 0) sel.onchange();
 }
 
 window.openSiteUsersModal = async (siteId) => {
@@ -938,6 +949,14 @@ window.syncGoogleSheet = async () => {
         if (colMap.length === 0) throw new Error('No valid columns mapped. Check User/Shift names.');
         log(`Mapped ${Object.keys(colMap).length} columns.`);
 
+        // Save URL to Site
+        try {
+            await apiClient.put(`/api/sites/${siteId}`, { google_sheet_url: url });
+            // Update local cache
+            const site = adminSites.find(s => s.id == siteId);
+            if(site) site.google_sheet_url = url;
+        } catch(e) { console.error("Failed to save URL", e); }
+
         // 4. Process Data
         const requests = [];
 
@@ -957,32 +976,40 @@ window.syncGoogleSheet = async () => {
                 const val = row[c];
                 const map = colMap[c];
 
-                if (map && val && val.toUpperCase() === 'TRUE') {
+                // If this column corresponds to a mapped user/shift
+                if (map) {
+                    const cellVal = row[c] || '';
+                    let type = null;
+                    let shiftId = null;
+
+                    if (cellVal.toUpperCase() === 'TRUE') {
+                        type = map.type;
+                        shiftId = map.shiftId;
+                    }
+                    // Else: type is null (Delete request for this date/user)
+
                     requests.push({
                         userId: map.userId,
                         date: isoDate,
-                        shiftId: map.shiftId,
-                        type: map.type
+                        shiftId: shiftId,
+                        type: type
                     });
                 }
             }
         }
 
-        log(`Found ${requests.length} requests to import.`);
+        log(`Processing ${requests.length} entries (upsert/delete)...`);
 
-        // 5. Send
+        // 5. Send (Bulk Sync)
         if (requests.length > 0) {
             titleEl.textContent = 'Syncing...';
-            const res = await apiClient.post('/api/requests/bulk-merge', { siteId, requests });
+            const res = await apiClient.post('/api/requests/bulk-sync', { siteId, requests });
             titleEl.textContent = 'Complete';
-            log(`Success! Added ${res.added} new requests.`);
-            if (res.added < requests.length) {
-                log(`(Skipped ${requests.length - res.added} duplicates)`);
-            }
+            log(`Success! Upserted: ${res.upserted || 0}, Deleted: ${res.deleted || 0}`);
             window.showToast('Sync Complete', 'success');
         } else {
             titleEl.textContent = 'Done';
-            log('No new requests found.');
+            log('No entries found.');
         }
 
     } catch (e) {
@@ -2187,12 +2214,12 @@ function renderBulkMetricsTable(users) {
         tdName.textContent = u.username;
         tr.appendChild(tdName);
 
-        // Columns: Target, Max, Min, Variance, Block
+        // Columns: Target, Variance, Block, Max Consec, Min Days Off
         tr.appendChild(createInput(s.target_shifts, 'target_shifts', 1));
-        tr.appendChild(createInput(s.max_consecutive_shifts, 'max_consecutive_shifts', 2));
-        tr.appendChild(createInput(s.min_days_off, 'min_days_off', 3));
-        tr.appendChild(createInput(s.target_shifts_variance, 'target_shifts_variance', 4));
-        tr.appendChild(createInput(s.preferred_block_size, 'preferred_block_size', 5));
+        tr.appendChild(createInput(s.target_shifts_variance, 'target_shifts_variance', 2));
+        tr.appendChild(createInput(s.preferred_block_size, 'preferred_block_size', 3));
+        tr.appendChild(createInput(s.max_consecutive_shifts, 'max_consecutive_shifts', 4));
+        tr.appendChild(createInput(s.min_days_off, 'min_days_off', 5));
 
         tbody.appendChild(tr);
     });
