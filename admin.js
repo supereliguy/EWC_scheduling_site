@@ -116,8 +116,12 @@ window.openSettings = async (id) => {
         document.getElementById('setting-block-size').value = s.preferred_block_size || 3;
 
         // Availability Rules
-        let avail = { blocked_days: [], blocked_shifts: [] };
-        try { avail = JSON.parse(s.availability_rules || '{"blocked_days":[], "blocked_shifts":[]}'); } catch(e) {}
+        let avail = { blocked_days: [], blocked_shifts: [], blocked_shift_days: [] };
+        try { avail = JSON.parse(s.availability_rules || '{"blocked_days":[], "blocked_shifts":[], "blocked_shift_days":[]}'); } catch(e) {}
+
+        if (!avail.blocked_days) avail.blocked_days = [];
+        if (!avail.blocked_shifts) avail.blocked_shifts = [];
+        if (!avail.blocked_shift_days) avail.blocked_shift_days = [];
 
         // Render Days (0=Sun)
         const daysDiv = document.getElementById('setting-avail-days');
