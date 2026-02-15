@@ -1111,7 +1111,8 @@ window.onMonthPickerChange = () => {
     const lastDay = new Date(y, m, 0); // last day of previous month (so month m)
 
     // Update hidden inputs
-    document.getElementById('schedule-start-date').value = firstDay.toISOString().split('T')[0];
+    // Use toDateStr to preserve local date (avoiding UTC shift issues)
+    document.getElementById('schedule-start-date').value = window.toDateStr(firstDay);
     document.getElementById('schedule-days').value = lastDay.getDate();
 
     loadSchedule();
@@ -1132,6 +1133,7 @@ window.switchScheduleView = (mode) => {
     updateBtn('view-calendar-btn', mode === 'calendar');
     updateBtn('view-dates-shifts-btn', mode === 'dates-shifts');
     updateBtn('view-shifts-dates-btn', mode === 'shifts-dates');
+    updateBtn('view-simple-btn', mode === 'simple');
 
     loadSchedule();
 };
@@ -1383,6 +1385,8 @@ async function loadSchedule() {
         renderScheduleDatesShiftsView(display, params, assignments, requests, shifts, siteUsers);
     } else if (currentScheduleView === 'shifts-dates') {
         renderScheduleShiftsDatesView(display, params, assignments, requests, shifts, siteUsers);
+    } else if (currentScheduleView === 'simple') {
+        renderScheduleSimpleView(display, params, assignments, requests, shifts, siteUsers);
     } else {
         renderScheduleTimelineView(display, params, assignments, requests, shifts, siteUsers);
     }
@@ -2307,5 +2311,171 @@ window.saveBulkMetrics = async () => {
         loadUsers();
     } catch (e) {
         window.showToast(e.message, 'danger');
+    }
+};
+
+function renderScheduleSimpleView(container, params, assignments, requests, shifts, users) {
+    const [y, m, d] = params.startDate.split('-').map(Number);
+    const startObj = new Date(y, m-1, d);
+    const daysCount = parseInt(params.days);
+
+    let html = '<div style="overflow-x:auto;"><table class="table table-bordered mb-0" style="min-width: 100%; text-align: center;">';
+
+    // Header: Date, Shift 1, Shift 2...
+    html += '<thead><tr><th style="min-width: 120px;">Date</th>';
+    shifts.forEach(s => {
+        html += `<th>${escapeHTML(s.name)}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+
+    // Rows: Dates
+    for(let i=0; i<daysCount; i++) {
+        const date = new Date(startObj);
+        date.setDate(startObj.getDate() + i);
+        const dateStr = window.toDateStr(date);
+        const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
+
+        html += `<tr><td class="fw-bold">${date.getMonth()+1}/${date.getDate()} <small>${dayName}</small></td>`;
+
+        shifts.forEach(s => {
+            // Find assignments for this shift on this date
+            const shiftAssigns = assignments.filter(a => a.date === dateStr && a.shift_id === s.id);
+            const userNames = shiftAssigns.map(a => {
+                const u = users.find(u => u.id === a.user_id);
+                return u ? u.username : 'Unknown';
+            }).join(', ');
+
+            html += `<td>${escapeHTML(userNames)}</td>`;
+        });
+        html += '</tr>';
+    }
+
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+}
+
+window.exportScheduleCSV = async () => {
+    const params = getScheduleParams();
+    if(!params.siteId || !params.startDate) {
+        window.showToast('Please select a site and month first.', 'warning');
+        return;
+    }
+
+    try {
+        const [scheduleData, shiftsData, usersData] = await Promise.all([
+            apiClient.get(`/api/schedule?siteId=${params.siteId}&startDate=${params.startDate}&days=${params.days}`),
+            apiClient.get(`/api/sites/${params.siteId}/shifts`),
+            apiClient.get(`/api/sites/${params.siteId}/users`)
+        ]);
+
+        const assignments = scheduleData.schedule || [];
+        const shifts = shiftsData.shifts || [];
+        const users = usersData.users || [];
+
+        // Header
+        let csv = 'Date,' + shifts.map(s => `"${s.name.replace(/"/g, '""')}"`).join(',') + '\n';
+
+        const [y, m, d] = params.startDate.split('-').map(Number);
+        const startObj = new Date(y, m-1, d);
+        const daysCount = parseInt(params.days);
+
+        for(let i=0; i<daysCount; i++) {
+            const date = new Date(startObj);
+            date.setDate(startObj.getDate() + i);
+            const dateStr = window.toDateStr(date);
+
+            let row = [dateStr];
+
+            shifts.forEach(s => {
+                const shiftAssigns = assignments.filter(a => a.date === dateStr && a.shift_id === s.id);
+                const names = shiftAssigns.map(a => {
+                    const u = users.find(u => u.id === a.user_id);
+                    return u ? u.username : '';
+                }).join(', ');
+                row.push(`"${names.replace(/"/g, '""')}"`);
+            });
+            csv += row.join(',') + '\n';
+        }
+
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `schedule_${params.startDate}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+        window.showToast('CSV Exported', 'success');
+
+    } catch(e) {
+        window.showToast('Export failed: ' + e.message, 'danger');
+    }
+};
+
+window.exportSchedulePDF = async () => {
+    const params = getScheduleParams();
+    if(!params.siteId || !params.startDate) {
+        window.showToast('Please select a site and month first.', 'warning');
+        return;
+    }
+
+    if (!window.jspdf) {
+         window.showToast('PDF library not loaded. Check internet connection.', 'danger');
+         return;
+    }
+
+    try {
+        const [scheduleData, shiftsData, usersData] = await Promise.all([
+            apiClient.get(`/api/schedule?siteId=${params.siteId}&startDate=${params.startDate}&days=${params.days}`),
+            apiClient.get(`/api/sites/${params.siteId}/shifts`),
+            apiClient.get(`/api/sites/${params.siteId}/users`)
+        ]);
+
+        const assignments = scheduleData.schedule || [];
+        const shifts = shiftsData.shifts || [];
+        const users = usersData.users || [];
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: 'landscape' });
+
+        const head = [['Date', ...shifts.map(s => s.name)]];
+        const body = [];
+
+        const [y, m, d] = params.startDate.split('-').map(Number);
+        const startObj = new Date(y, m-1, d);
+        const daysCount = parseInt(params.days);
+
+        for(let i=0; i<daysCount; i++) {
+            const date = new Date(startObj);
+            date.setDate(startObj.getDate() + i);
+            const dateStr = window.toDateStr(date);
+            const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
+
+            const row = [`${dateStr} (${dayName})`];
+
+            shifts.forEach(s => {
+                const shiftAssigns = assignments.filter(a => a.date === dateStr && a.shift_id === s.id);
+                const names = shiftAssigns.map(a => {
+                    const u = users.find(u => u.id === a.user_id);
+                    return u ? u.username : '';
+                }).join('\n'); // Newline for PDF cells
+                row.push(names);
+            });
+            body.push(row);
+        }
+
+        doc.autoTable({
+            head: head,
+            body: body,
+            styles: { fontSize: 8, cellPadding: 1, overflow: 'linebreak' },
+            headStyles: { fillColor: [22, 160, 133] },
+            theme: 'grid'
+        });
+
+        doc.save(`schedule_${params.startDate}.pdf`);
+        window.showToast('PDF Exported', 'success');
+
+    } catch(e) {
+        console.error(e);
+        window.showToast('Export failed: ' + e.message, 'danger');
     }
 };
