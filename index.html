@@ -256,25 +256,25 @@
                             <!-- New Controls -->
                             <div class="d-flex justify-content-between align-items-center mb-3 p-3 rounded" style="background-color: #161b22; border: 1px solid #30363d;">
                                 <div class="d-flex align-items-center gap-2">
-                                    <button class="btn btn-secondary" onclick="changeMonth(-1)">Previous</button>
-                                    <input type="month" id="schedule-month-picker" class="form-control" style="width: auto;" onchange="onMonthPickerChange()">
-                                    <button class="btn btn-secondary" onclick="changeMonth(1)">Next</button>
+                                    <button class="btn btn-secondary" onclick="changeMonth(-1)" title="Previous Month">Previous</button>
+                                    <input type="month" id="schedule-month-picker" class="form-control" style="width: auto;" onchange="onMonthPickerChange()" title="Select Month">
+                                    <button class="btn btn-secondary" onclick="changeMonth(1)" title="Next Month">Next</button>
                                 </div>
 
                                 <div class="d-flex align-items-center gap-2">
                                     <div class="btn-group" role="group">
-                                        <button type="button" class="btn btn-primary active" id="view-dates-shifts-btn" onclick="switchScheduleView('dates-shifts')">By Date</button>
-                                        <button type="button" class="btn btn-outline-primary" id="view-calendar-btn" onclick="switchScheduleView('calendar')">Calendar</button>
-                                        <button type="button" class="btn btn-outline-primary" id="view-shifts-dates-btn" onclick="switchScheduleView('shifts-dates')">By Shift</button>
-                                        <button type="button" class="btn btn-outline-primary" id="view-timeline-btn" onclick="switchScheduleView('timeline')">Timeline</button>
+                                        <button type="button" class="btn btn-primary active" id="view-dates-shifts-btn" onclick="switchScheduleView('dates-shifts')" title="View schedule grouped by Date">By Date</button>
+                                        <button type="button" class="btn btn-outline-primary" id="view-calendar-btn" onclick="switchScheduleView('calendar')" title="View schedule as a Calendar">Calendar</button>
+                                        <button type="button" class="btn btn-outline-primary" id="view-shifts-dates-btn" onclick="switchScheduleView('shifts-dates')" title="View schedule grouped by Shift">By Shift</button>
+                                        <button type="button" class="btn btn-outline-primary" id="view-timeline-btn" onclick="switchScheduleView('timeline')" title="View visual timeline of shifts">Timeline</button>
                                     </div>
                                     <div class="vr mx-2 text-secondary"></div>
-                                    <div class="input-group input-group-sm me-2" style="width: 150px;">
+                                    <div class="input-group input-group-sm me-2" style="width: 150px;" title="Number of iterations for the algorithm (higher = better quality, slower)">
                                         <span class="input-group-text bg-dark text-white border-secondary">Iter</span>
                                         <input type="number" class="form-control bg-dark text-white border-secondary" id="schedule-iterations" value="100" min="1" step="10">
                                     </div>
-                                    <button class="btn btn-warning fw-bold text-dark" id="generate-schedule-btn">Auto-Schedule</button>
-                                    <button class="btn btn-secondary" onclick="openSnapshotsModal()">History</button>
+                                    <button class="btn btn-warning fw-bold text-dark" id="generate-schedule-btn" title="Run the auto-scheduler algorithm">Auto-Schedule</button>
+                                    <button class="btn btn-secondary" onclick="openSnapshotsModal()" title="View or restore past schedule versions">History</button>
         <div class="dropdown ms-2">
             <button class="btn btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
                 Actions
@@ -505,10 +505,9 @@
                                 <option value="">Any Shift</option>
                             </select>
                             <div class="btn-group">
-                                <button id="req-work-btn" class="btn btn-outline-success" onclick="setReqMode('work')">Work</button>
-                                <button id="req-avoid-btn" class="btn btn-outline-warning text-dark" onclick="setReqMode('avoid')">Avoid</button>
-                                <button id="req-off-btn" class="btn btn-outline-danger" onclick="setReqMode('off')">Off</button>
-                                <button id="req-clear-btn" class="btn btn-outline-secondary" onclick="setReqMode('clear')">Clear</button>
+                                <button id="req-work-btn" class="btn btn-outline-success" onclick="setReqMode('work')" title="Mark as preferred to work (Green, High Priority)">Work</button>
+                                <button id="req-off-btn" class="btn btn-outline-danger" onclick="setReqMode('off')" title="Mark as unavailable for this shift (Red, Hard Stop)">Off</button>
+                                <button id="req-clear-btn" class="btn btn-outline-secondary" onclick="setReqMode('clear')" title="Clear request">Clear</button>
                             </div>
                         </div>
                     </div>
