@@ -278,8 +278,8 @@ api.get('/api/sites', (req, res) => {
     res.json({ sites });
 });
 api.post('/api/sites', (req, res) => {
-    const { name, description } = req.body;
-    const result = window.db.prepare('INSERT INTO sites (name, description) VALUES (?, ?)').run(name, description || '');
+    const { name, description, google_sheet_url } = req.body;
+    const result = window.db.prepare('INSERT INTO sites (name, description, google_sheet_url) VALUES (?, ?, ?)').run(name, description || '', google_sheet_url || null);
     // Link admin to site automatically so they show up in schedule
     window.db.prepare('INSERT INTO site_users (site_id, user_id) VALUES (?, 1)').run(result.lastInsertRowid);
     res.json({ message: 'Site created', id: result.lastInsertRowid });
@@ -324,13 +324,14 @@ api.delete('/api/sites/:id', (req, res) => {
 
 api.put('/api/sites/:id', (req, res) => {
     const { id } = req.params;
-    const { name, description, weekend_start_day, weekend_start_time, weekend_end_day, weekend_end_time } = req.body;
+    const { name, description, google_sheet_url, weekend_start_day, weekend_start_time, weekend_end_day, weekend_end_time } = req.body;
 
     // Use COALESCE to keep existing values if not provided (undefined -> null)
     const stmt = window.db.prepare(`
         UPDATE sites
         SET name = COALESCE(?, name),
             description = COALESCE(?, description),
+            google_sheet_url = COALESCE(?, google_sheet_url),
             weekend_start_day = COALESCE(?, weekend_start_day),
             weekend_start_time = COALESCE(?, weekend_start_time),
             weekend_end_day = COALESCE(?, weekend_end_day),
@@ -338,7 +339,7 @@ api.put('/api/sites/:id', (req, res) => {
         WHERE id = ?
     `);
 
-    stmt.run(name, description, weekend_start_day, weekend_start_time, weekend_end_day, weekend_end_time, id);
+    stmt.run(name, description, google_sheet_url, weekend_start_day, weekend_start_time, weekend_end_day, weekend_end_time, id);
     res.json({ message: 'Site updated' });
 });
 
@@ -600,6 +601,32 @@ api.post('/api/requests/bulk-merge', (req, res) => {
         });
     })();
     res.json({ message: 'Bulk merge complete', added: addedCount });
+});
+
+api.post('/api/requests/bulk-sync', (req, res) => {
+    const { siteId, requests } = req.body;
+    // requests: Array of { userId, date, type, shiftId }
+    // type can be null (delete) or string (insert)
+
+    let upserted = 0;
+    let deleted = 0;
+
+    window.db.transaction(() => {
+        const deleteStmt = window.db.prepare('DELETE FROM requests WHERE site_id=? AND user_id=? AND date=?');
+        const insertStmt = window.db.prepare('INSERT INTO requests (site_id, user_id, date, type, shift_id) VALUES (?,?,?,?,?)');
+
+        requests.forEach(r => {
+            // Always delete existing for this slot to ensure clean state (overwrite)
+            const res = deleteStmt.run(siteId, r.userId, r.date);
+            if (res.changes > 0) deleted++;
+
+            if (r.type) {
+                 insertStmt.run(siteId, r.userId, r.date, r.type, r.shiftId || null);
+                 upserted++;
+            }
+        });
+    })();
+    res.json({ message: 'Sync complete', upserted, deleted });
 });
 
 

@@ -59,7 +59,8 @@ class DBWrapper {
             CREATE TABLE IF NOT EXISTS sites (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT,
-                description TEXT
+                description TEXT,
+                google_sheet_url TEXT
             );
             CREATE TABLE IF NOT EXISTS shifts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -194,6 +195,20 @@ class DBWrapper {
             }
         } catch(e) {
             console.error("Migration error (weekend_config):", e);
+        }
+
+        // Migration: Add google_sheet_url to sites if missing
+        try {
+            const result = this.db.exec("PRAGMA table_info(sites)");
+            if (result.length > 0) {
+                const cols = result[0].values;
+                const hasUrl = cols.some(c => c[1] === 'google_sheet_url');
+                if (!hasUrl) {
+                    this.db.run("ALTER TABLE sites ADD COLUMN google_sheet_url TEXT");
+                }
+            }
+        } catch(e) {
+            console.error("Migration error (google_sheet_url):", e);
         }
 
         // Migration: Add no_preference to user_settings if missing

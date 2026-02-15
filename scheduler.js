@@ -697,6 +697,21 @@ const validateSchedule = ({ siteId, startDate, days, assignments: providedAssign
                 });
                 if (type === 'hard') report[uId].status = 'error';
                 else if (report[uId].status !== 'error') report[uId].status = 'warning';
+            } else {
+                // Soft Limit Check (Target Shifts)
+                // If we are exceeding target shifts but within Max (Target + Variance), flag as warning.
+                // state.totalAssigned is count BEFORE adding this shift.
+                // So if Target=10, 10th shift (count 9) is OK. 11th shift (count 10) is Warning.
+                const target = settings.target_shifts || 0;
+                if (state.totalAssigned >= target) {
+                     report[uId].issues.push({
+                        date: dateStr,
+                        type: 'soft',
+                        reason: `Over Target Shifts (${state.totalAssigned + 1} > ${target})`,
+                        shift: shift.name
+                    });
+                    if (report[uId].status !== 'error') report[uId].status = 'warning';
+                }
             }
 
             // Update State
