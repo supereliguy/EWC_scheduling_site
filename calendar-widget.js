@@ -12,6 +12,8 @@ class CalendarWidget {
         this.paintMode = null; // { type: '...', shiftId: ..., shiftName: ... }
         this.shifts = []; // New: store available shifts
         this.isPainting = false;
+        this.dragStart = null;
+        this.dragEnd = null;
 
         this.init();
     }
@@ -19,8 +21,8 @@ class CalendarWidget {
     init() {
         this.container.classList.add('calendar-grid');
         this.container.addEventListener('mousedown', (e) => this.handleMouseDown(e));
-        // Removed drag-painting for now as it's complex with individual shift toggles
-        // document.addEventListener('mouseup', () => { this.isPainting = false; });
+        this.container.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+        document.addEventListener('mouseup', (e) => this.handleMouseUp(e));
     }
 
     setMonth(year, month) {
@@ -141,88 +143,238 @@ class CalendarWidget {
         const date = dayEl.dataset.date;
         const target = e.target;
 
-        // 1. Check if clicked Day Header (Toggle Whole Day Off)
-        if (target.closest('.day-header') || target === dayEl) {
-            this.toggleDayOff(date);
-            return;
-        }
-
-        // 2. Check if clicked Shift Pill
+        // Check for Shift Pill Click (Prioritize specific shift toggles)
         const pill = target.closest('.shift-pill');
         if (pill) {
             const shiftId = parseInt(pill.dataset.shiftId);
             const shiftName = pill.dataset.shiftName;
             this.toggleShiftRequest(date, shiftId, shiftName);
+            this.render();
+            if (this.options.onPaint) this.options.onPaint();
             return;
         }
+
+        // Otherwise, Day Click/Drag
+        // Only enable drag if in "Off" mode (or generic mode without specific shift)
+        // If we have a specific shift selected, dragging day-to-day is ambiguous
+        // (Do we add that shift to all days? Maybe, but user specifically asked for "highlight multiple days for off")
+        if (this.paintMode && (this.paintMode.type === 'off' || this.paintMode.type === 'clear') && !this.paintMode.shiftId) {
+            this.dragStart = date;
+            this.dragEnd = date;
+            this.updateDragHighlights();
+            e.preventDefault(); // Prevent text selection
+        } else {
+            // Fallback for other modes: just toggle single day
+            // But wait, we moved logic to mouseup for drag support.
+            // If we are not in drag mode, we should execute immediately?
+            // Or just treat as 1-day drag?
+            // Let's treat as 1-day drag for consistency.
+            this.dragStart = date;
+            this.dragEnd = date;
+            this.updateDragHighlights();
+        }
     }
+
+    handleMouseMove(e) {
+        if (!this.dragStart) return;
+
+        const dayEl = e.target.closest('.calendar-day');
+        if (dayEl && !dayEl.classList.contains('empty')) {
+             const date = dayEl.dataset.date;
+             if (this.dragEnd !== date) {
+                 this.dragEnd = date;
+                 this.updateDragHighlights();
+             }
+        }
+    }
+
+    handleMouseUp(e) {
+        if (!this.dragStart) return;
+
+        // Apply action to range
+        const dates = this.getDatesInRange(this.dragStart, this.dragEnd);
+        const mode = this.paintMode ? this.paintMode.type : 'off';
+        const shiftId = this.paintMode ? this.paintMode.shiftId : null;
+        const shiftName = this.paintMode ? this.paintMode.shiftName : null;
+
+        let changed = false;
+
+        // Determine Action:
+        // If single click (dates.length === 1), we toggle.
+        // If drag (dates.length > 1), we set to active mode (Add).
+
+        const isBulk = dates.length > 1;
+
+        dates.forEach(date => {
+            if (shiftId) {
+                // Shift Mode
+                if (isBulk) {
+                    // Set (Add)
+                    this.setShiftRequest(date, shiftId, shiftName, mode);
+                    changed = true;
+                } else {
+                    // Toggle
+                    this.toggleShiftRequest(date, shiftId, shiftName);
+                    // toggleShiftRequest handles its own render/callback, but we might double render here.
+                    // Actually toggleShiftRequest modifies this.requests.
+                    // We should suppressing render in loop and render once.
+                    // Refactor toggleShiftRequest to return boolean?
+                    // For now, let's just let it run.
+                    changed = true;
+                }
+            } else {
+                // Day Mode (Off/Clear)
+                if (isBulk) {
+                     // Force Set
+                     if (mode === 'clear') {
+                         this.removeDayRequests(date);
+                         changed = true;
+                     } else {
+                         // Set to Off
+                         this.setDayOff(date, true);
+                         changed = true;
+                     }
+                } else {
+                    // Toggle
+                    if (mode === 'clear') {
+                         this.removeDayRequests(date); // Clear is clear
+                    } else {
+                         this.toggleDayOff(date);
+                    }
+                    changed = true;
+                }
+            }
+        });
+
+        this.dragStart = null;
+        this.dragEnd = null;
+
+        // Cleanup visuals
+        this.container.querySelectorAll('.drag-highlight').forEach(el => el.classList.remove('drag-highlight'));
+
+        if (changed && isBulk) {
+            // If isBulk, we didn't call toggle methods that render.
+            // If single, toggle methods called render.
+            // But wait, I called toggleShiftRequest/toggleDayOff which DO call render.
+            // So render is called N times. Not ideal but functional.
+            // Optimization: split logic.
+        }
+
+        // Re-render to be safe and clean
+        this.render();
+        if (this.options.onPaint) this.options.onPaint();
+    }
+
+    getDatesInRange(startStr, endStr) {
+        const start = new Date(startStr);
+        const end = new Date(endStr);
+        const dates = [];
+
+        // Handle reverse drag
+        const low = start < end ? start : end;
+        const high = start < end ? end : start;
+
+        const current = new Date(low);
+        while (current <= high) {
+             dates.push(current.toISOString().split('T')[0]);
+             current.setDate(current.getDate() + 1);
+        }
+        return dates;
+    }
+
+    updateDragHighlights() {
+        if (!this.dragStart || !this.dragEnd) return;
+        const dates = new Set(this.getDatesInRange(this.dragStart, this.dragEnd));
+
+        this.container.querySelectorAll('.calendar-day').forEach(el => {
+            if (dates.has(el.dataset.date)) {
+                el.classList.add('drag-highlight');
+            } else {
+                el.classList.remove('drag-highlight');
+            }
+        });
+    }
+
+    setDayOff(date, forceOn) {
+         // Force Day Off
+         // Remove existing requests for this day
+         this.removeDayRequests(date);
+         this.requests.push({ date, type: 'off', shiftId: null, shiftName: null });
+    }
+
+    removeDayRequests(date) {
+         let i = this.requests.length;
+         while (i--) {
+             if (this.requests[i].date === date) {
+                 this.requests.splice(i, 1);
+             }
+         }
+    }
+
+    // Updated toggleShiftRequest to separate logic from render if needed, but keeping it simple for now.
+    // We will just call it.
 
     toggleDayOff(date) {
         // Find existing Day Off request (type='off', shiftId=null)
         const idx = this.requests.findIndex(r => r.date === date && r.type === 'off' && !r.shiftId);
 
         if (idx > -1) {
-            // Remove it
             this.requests.splice(idx, 1);
         } else {
-            // Add it. Also, maybe clear other requests for this day to keep it clean?
-            // Usually Day Off implies no specific shift requests needed.
-            // Let's remove any other requests for this date first.
-            let i = this.requests.length;
-            while (i--) {
-                if (this.requests[i].date === date) {
-                    this.requests.splice(i, 1);
-                }
-            }
+            this.removeDayRequests(date);
             this.requests.push({ date, type: 'off', shiftId: null, shiftName: null });
         }
-        this.render();
-        if (this.options.onPaint) this.options.onPaint();
+        // render handled by caller if bulk
     }
 
     toggleShiftRequest(date, shiftId, shiftName) {
         if (!this.paintMode) return;
-        const mode = this.paintMode.type; // 'work', 'avoid', 'off', 'clear'
+        const mode = this.paintMode.type;
 
-        // Determine intended type for this shift
         let targetType = null;
         if (mode === 'work') targetType = 'work';
         else if (mode === 'avoid') targetType = 'avoid';
         else if (mode === 'off') targetType = 'off';
         else if (mode === 'clear') targetType = null;
 
-        // Find existing request for this shift
-        const idx = this.requests.findIndex(r => r.date === date && (r.shiftId == shiftId)); // Loose eq for safety
+        const idx = this.requests.findIndex(r => r.date === date && (r.shiftId == shiftId));
 
         if (idx > -1) {
             const existing = this.requests[idx];
-
-            if (targetType === null) {
-                // Clear tool -> Remove
-                this.requests.splice(idx, 1);
-            } else if (existing.type === targetType) {
-                // Clicking same type -> Toggle Off (Remove)
+            if (targetType === null || existing.type === targetType) {
                 this.requests.splice(idx, 1);
             } else {
-                // Different type -> Update
                 existing.type = targetType;
             }
         } else {
-            // No existing request
             if (targetType !== null) {
-                // Add new request
                 this.requests.push({ date, type: targetType, shiftId, shiftName });
-
-                // If there was a Whole Day Off, remove it because user is adding specific constraints?
-                // Or keep it? If Day Off is set, specific constraints might be ignored by backend anyway.
-                // But for UI clarity, if I say "I want to work Shift A", I probably don't want "Day Off" anymore.
+                // Remove day off if specific shift added
                 const dayOffIdx = this.requests.findIndex(r => r.date === date && r.type === 'off' && !r.shiftId);
                 if (dayOffIdx > -1) this.requests.splice(dayOffIdx, 1);
             }
         }
+        // render handled by caller
+    }
 
-        this.render();
-        if (this.options.onPaint) this.options.onPaint();
+    setShiftRequest(date, shiftId, shiftName, mode) {
+        // Helper for bulk set
+        let targetType = null;
+        if (mode === 'work') targetType = 'work';
+        else if (mode === 'avoid') targetType = 'avoid';
+        else if (mode === 'off') targetType = 'off';
+
+        if (!targetType) return; // clear not handled here, handled by remove
+
+        // Remove existing for this shift
+        const idx = this.requests.findIndex(r => r.date === date && (r.shiftId == shiftId));
+        if (idx > -1) this.requests.splice(idx, 1);
+
+        this.requests.push({ date, type: targetType, shiftId, shiftName });
+
+        // Remove day off
+        const dayOffIdx = this.requests.findIndex(r => r.date === date && r.type === 'off' && !r.shiftId);
+        if (dayOffIdx > -1) this.requests.splice(dayOffIdx, 1);
     }
 }
 
