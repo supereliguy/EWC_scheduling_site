@@ -277,6 +277,7 @@ class DBWrapper {
             stmt.run(['target_shifts', '8']);
             stmt.run(['target_shifts_variance', '2']);
             stmt.run(['preferred_block_size', '3']);
+            stmt.run(['min_rest_hours', '12']);
         }
 
         // Ensure new weight settings exist (for existing DBs)
@@ -291,6 +292,7 @@ class DBWrapper {
         ensureSetting('rule_weight_request_work_specific', '10');
         ensureSetting('rule_weight_request_avoid_shift', '10');
         ensureSetting('rule_weight_request_work', '10');
+        ensureSetting('min_rest_hours', '12');
 
 
         // Default Admin removed as requested (blank slate)

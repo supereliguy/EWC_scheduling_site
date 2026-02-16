@@ -433,7 +433,7 @@ window.loadGlobalSettings = async (btn) => {
         document.getElementById('gs-variance').value = s.target_shifts_variance || 2;
         document.getElementById('gs-block-size').value = s.preferred_block_size || 3;
         document.getElementById('gs-min-consecutive-nights').value = s.min_consecutive_nights || 2;
-        document.getElementById('gs-min-rest-hours').value = s.min_rest_hours || 10;
+        document.getElementById('gs-min-rest-hours').value = s.min_rest_hours || 12;
 
         // Weights
         document.getElementById('rw-availability').value = s.rule_weight_availability || 10;

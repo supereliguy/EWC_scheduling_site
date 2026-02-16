@@ -146,7 +146,7 @@ const fetchScheduleContext = ({ siteId, startDate, days }) => {
         target_shifts: parseInt(globalSettings.target_shifts) || 20,
         target_variance: parseInt(globalSettings.target_shifts_variance) || 2,
         preferred_block_size: parseInt(globalSettings.preferred_block_size) || 3,
-        min_rest_hours: parseFloat(globalSettings.min_rest_hours) || 10.0 // Default 10 hours
+        min_rest_hours: parseFloat(globalSettings.min_rest_hours) || 12.0 // Default 12 hours
     };
 
     const userSettings = {};
@@ -359,7 +359,7 @@ const checkConstraints = (u, shift, dateStr, dateObj, state, settings, req, rule
 
     // 4. Min Rest Hours
     if (state.lastShift && shift.start_time && shift.end_time) {
-        const minRest = settings.min_rest_hours || 10;
+        const minRest = settings.min_rest_hours || 12;
 
         // Calculate End of Last Shift
         const [lastEndH, lastEndM] = state.lastShift.end_time.split(':').map(Number);
@@ -458,7 +458,7 @@ const calculateScore = (u, shift, dateObj, state, settings, req, site, ruleWeigh
 
     // Min Rest Hours
     if (state.lastShift && shift.start_time && shift.end_time) {
-        const minRest = settings.min_rest_hours || 10;
+        const minRest = settings.min_rest_hours || 12;
 
         const [lastEndH, lastEndM] = state.lastShift.end_time.split(':').map(Number);
         const [lastStartH] = state.lastShift.start_time.split(':').map(Number);
