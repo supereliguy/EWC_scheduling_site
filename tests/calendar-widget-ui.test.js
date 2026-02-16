@@ -75,11 +75,14 @@ describe('CalendarWidget Interaction', () => {
     test('toggles whole day off on header click', () => {
         const widget = new CalendarWidget('calendar');
         widget.setShifts([]);
+        widget.setPaintMode('off'); // Ensure correct mode
 
         const day = container.querySelector('.calendar-day:not(.empty)');
         const header = day.querySelector('.day-header');
 
+        // Simulate Drag-Click (MouseDown + MouseUp)
         header.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+        document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
 
         expect(widget.requests.length).toBe(1);
         expect(widget.requests[0].type).toBe('off');

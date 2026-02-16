@@ -540,7 +540,7 @@ window.openRequestsModal = async () => {
     }
 
     // Default mode
-    window.setReqMode('work');
+    window.setReqMode('off');
 
     // Load shifts for initial site to populate dropdown
     await populateReqShifts(select.value);

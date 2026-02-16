@@ -56,8 +56,26 @@ a:hover {
     border: 1px solid var(--border-color) !important;
 }
 
-.modal-header, .modal-footer {
-    border-color: var(--border-color) !important;
+.modal-content {
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5) !important;
+    border-radius: 8px !important;
+}
+
+.modal-header {
+    border-bottom: 1px solid var(--border-color) !important;
+    padding: 1rem 1.5rem;
+}
+
+.modal-footer {
+    border-top: 1px solid var(--border-color) !important;
+    padding: 1rem 1.5rem;
+    background-color: #0d1117; /* Slightly darker footer */
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+}
+
+.modal-body {
+    padding: 1.5rem;
 }
 
 .btn-close {
@@ -80,11 +98,21 @@ a:hover {
 
 /* Buttons - Premier Feel */
 .btn {
-    font-weight: 500;
-    border-radius: 4px;
-    padding: 5px 12px;
-    font-size: 0.95rem;
-    transition: all 0.2s ease-in-out;
+    font-weight: 600;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 0.9rem;
+    transition: all 0.2s cubic-bezier(0.3, 0, 0.5, 1);
+    letter-spacing: -0.01em;
+}
+
+.btn-sm {
+    padding: 4px 10px;
+    font-size: 0.85rem;
+}
+
+.btn:active {
+    transform: translateY(1px);
 }
 
 .btn-primary {
@@ -219,14 +247,18 @@ a:hover {
     border: 1px solid var(--border-color);
     border-radius: 8px;
     overflow: hidden;
+    user-select: none; /* Prevent text selection during drag */
 }
 
 .calendar-header {
     background-color: #161b22;
-    padding: 10px;
+    padding: 12px;
     text-align: center;
-    font-weight: bold;
-    color: #fff;
+    font-weight: 600;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
 .calendar-day {
@@ -234,20 +266,33 @@ a:hover {
     min-height: 120px;
     padding: 8px;
     position: relative;
-    cursor: default;
+    cursor: pointer;
     display: flex;
     flex-direction: column;
+    transition: background-color 0.1s;
 }
+
+.calendar-day:hover {
+    background-color: #161b22;
+}
+
 .calendar-day-header {
     text-align: right;
     font-size: 0.9rem;
     color: var(--text-muted);
-    margin-bottom: 5px;
+    margin-bottom: 6px;
+    font-variant-numeric: tabular-nums;
 }
 
 .calendar-day.empty {
     background-color: #161b22;
-    opacity: 0.5;
+    opacity: 0.3;
+    pointer-events: none;
+}
+
+.calendar-day.drag-highlight {
+    background-color: rgba(47, 129, 247, 0.2) !important;
+    border: 1px solid var(--primary-color) !important;
 }
 
 /* Badges for Shifts in Calendar View */
@@ -303,21 +348,20 @@ a:hover {
     cursor: pointer;
     border-radius: 4px;
     padding: 2px 5px;
+    transition: color 0.2s;
 }
 .day-header:hover {
-    background-color: rgba(255, 255, 255, 0.1);
-    color: #fff;
+    color: var(--text-color);
 }
 
 /* Day Off State */
 .calendar-day.day-off {
-    background-color: rgba(218, 54, 51, 0.15) !important; /* Dark red tint */
-    border: 1px solid #da3633 !important;
+    background-color: rgba(218, 54, 51, 0.1) !important; /* Dark red tint */
+    box-shadow: inset 0 0 0 1px rgba(218, 54, 51, 0.4); /* Cleaner border */
 }
 .calendar-day.day-off .day-header {
     color: #ff7b72;
-    text-decoration: line-through;
-    font-weight: bold;
+    font-weight: 600;
 }
 
 /* Shift Pills */
