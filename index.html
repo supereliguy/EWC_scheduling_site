@@ -712,7 +712,8 @@
                 window.db.validateImport(u8);
 
                 // Re-init DB
-                window.db.db = new window.SQL.Database(u8);
+                // window.SQL is not exposed globally, we access it via the initialized db instance
+                window.db.db = new window.db.SQL.Database(u8);
                 await window.db.save();
                 alert('Database imported successfully! Reloading...');
                 location.reload();
