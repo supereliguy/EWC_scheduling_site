@@ -253,6 +253,7 @@ const generateSchedule = async ({ siteId, startDate, days, force, iterations, on
     let bestScore = -Infinity;
     let stagnantIterations = 0;
     const startTime = Date.now();
+    const strategies = ['sequential', 'reverse', 'random', 'weekends_first', 'nights_first'];
 
     for (let i = 0; i < maxIterations; i++) {
         // Yield to UI thread for progress updates
@@ -260,6 +261,8 @@ const generateSchedule = async ({ siteId, startDate, days, force, iterations, on
             onProgress(Math.round((i / maxIterations) * 100));
             await new Promise(r => setTimeout(r, 0));
         }
+
+        const currentStrategy = strategies[i % strategies.length];
 
         const result = runGreedy({
             siteId, startObj: ctx.startObj, days,
@@ -272,7 +275,8 @@ const generateSchedule = async ({ siteId, startDate, days, force, iterations, on
             lockedAssignments: ctx.lockedAssignments,
             forceMode: !!force,
             site: ctx.site, // Pass site
-            ruleWeights: ctx.ruleWeights // Pass weights
+            ruleWeights: ctx.ruleWeights, // Pass weights
+            strategy: currentStrategy
         });
 
         if (result.score > bestScore) {
@@ -863,6 +867,390 @@ const validateSchedule = ({ siteId, startDate, days, assignments: providedAssign
     return report;
 };
 
+const buildAssignmentIndex = (assignments) => {
+    const index = {};
+    for (const a of assignments) {
+        const uid = a.userId !== undefined ? a.userId : a.user_id;
+        if (!uid) continue; // Safety
+        if (!index[uid]) index[uid] = {};
+        if (!index[uid][a.date]) index[uid][a.date] = [];
+        index[uid][a.date].push(a);
+    }
+    return index;
+};
+
+const checkConstraintsBiDirectional = (u, shift, dateStr, dateObj, index, _settings, req, ruleWeights, site, totalAssigned) => {
+    const settings = _settings || {};
+    const w = ruleWeights || {
+        max_consecutive: 10,
+        min_days_off: 10,
+        target_variance: 10,
+        availability: 10,
+        request_off: 10,
+        circadian_strict: 10,
+        min_rest_hours: 10
+    };
+
+    // 0. Request Off
+    if (req && req.type === 'off') {
+        if (req.shift_id) {
+            if (req.shift_id === shift.id) {
+                if (w.request_off >= 10) return { valid: false, reason: 'Requested Off' };
+            }
+        } else {
+            if (w.request_off >= 10) return { valid: false, reason: 'Requested Off' };
+        }
+    }
+
+    // 0.05 Request Avoid Shift
+    if (req && req.type === 'avoid') {
+        if (req.shift_id === shift.id) {
+             if (w.request_avoid_shift >= 10) return { valid: false, reason: 'Requested Avoid Shift' };
+        }
+    }
+
+    // 0.1 Availability Rules
+    const dayOfWeek = dateObj.getDay();
+    if (settings.availability && settings.availability.blocked_days && settings.availability.blocked_days.includes(dayOfWeek)) {
+         if (w.availability >= 10) return { valid: false, reason: 'Availability (Day Blocked)' };
+    }
+    const specificBlockKey = `${shift.id}-${dayOfWeek}`;
+    if (settings.availability && settings.availability.blocked_shift_days && settings.availability.blocked_shift_days.includes(specificBlockKey)) {
+         if (w.availability >= 10) return { valid: false, reason: 'Availability (Shift Blocked on Day)' };
+    }
+    if (settings.availability && settings.availability.blocked_shifts && settings.availability.blocked_shifts.includes(shift.id)) {
+         if (w.availability >= 10) return { valid: false, reason: 'Availability (Shift Blocked)' };
+    }
+
+    // 0.2 Max Variance (Target Shifts)
+    const maxShifts = (settings.target_shifts || 0) + (settings.target_variance || 0);
+    if (totalAssigned >= maxShifts) {
+        if (w.target_variance >= 10) return { valid: false, reason: `Max Shifts Exceeded (${maxShifts})` };
+    }
+
+    // Bi-Directional Checks
+    const userHistory = index[u.id] || {};
+    const oneDay = 24 * 60 * 60 * 1000;
+
+    const getAssignsAt = (offset) => {
+        const d = new Date(dateObj);
+        d.setDate(d.getDate() + offset);
+        const s = toDateStr(d);
+        return { date: d, assigns: userHistory[s] || [] };
+    };
+
+    // 1. Max Consecutive
+    let backward = 0;
+    let i = 1;
+    while (true) {
+        const { assigns, date } = getAssignsAt(-i);
+        if (assigns.length > 0) backward++;
+        else break;
+        i++;
+    }
+    let forward = 0;
+    i = 1;
+    while (true) {
+        const { assigns } = getAssignsAt(i);
+        if (assigns.length > 0) forward++;
+        else break;
+        i++;
+    }
+
+    if (backward + 1 + forward > settings.max_consecutive) {
+        // console.log(`DEBUG: User ${u.id} Date ${dateStr} Fail MaxConsec. B=${backward} F=${forward} Max=${settings.max_consecutive}`);
+        if (w.max_consecutive >= 10) return { valid: false, reason: `Max Consecutive Shifts (${settings.max_consecutive})` };
+    }
+
+    // 2. Min Rest Hours & Circadian Strict
+    const prev = getAssignsAt(-1);
+    if (prev.assigns.length > 0) {
+        for (const p of prev.assigns) {
+            const pShift = p.shiftObj || p.shift;
+
+            if (isNightShift(pShift) && !isNightShift(shift)) {
+                 if (w.circadian_strict >= 10) return { valid: false, reason: 'Inadequate Rest (Night -> Day)' };
+            }
+
+            const minRest = settings.min_rest_hours || 12;
+            const [pEndH, pEndM] = pShift.end_time.split(':').map(Number);
+            const [pStartH] = pShift.start_time.split(':').map(Number);
+            const pEndDate = new Date(prev.date);
+            pEndDate.setHours(pEndH, pEndM, 0, 0);
+            if (pEndH < pStartH) pEndDate.setDate(pEndDate.getDate() + 1);
+
+            const [cStartH, cStartM] = shift.start_time.split(':').map(Number);
+            const cStartDate = new Date(dateObj);
+            cStartDate.setHours(cStartH, cStartM, 0, 0);
+
+            const gap = (cStartDate - pEndDate) / (1000 * 60 * 60);
+            if (gap < minRest) {
+                 if (w.min_rest_hours >= 10) return { valid: false, reason: `Inadequate Rest (${gap.toFixed(1)}h < ${minRest}h)` };
+            }
+        }
+    }
+
+    const next = getAssignsAt(1);
+    if (next.assigns.length > 0) {
+        for (const n of next.assigns) {
+            const nShift = n.shiftObj || n.shift;
+
+            if (isNightShift(shift) && !isNightShift(nShift)) {
+                 if (w.circadian_strict >= 10) return { valid: false, reason: 'Inadequate Rest (Night -> Day)' };
+            }
+
+            const minRest = settings.min_rest_hours || 12;
+            const [cEndH, cEndM] = shift.end_time.split(':').map(Number);
+            const [cStartH] = shift.start_time.split(':').map(Number);
+            const cEndDate = new Date(dateObj);
+            cEndDate.setHours(cEndH, cEndM, 0, 0);
+            if (cEndH < cStartH) cEndDate.setDate(cEndDate.getDate() + 1);
+
+            const [nStartH, nStartM] = nShift.start_time.split(':').map(Number);
+            const nStartDate = new Date(next.date);
+            nStartDate.setHours(nStartH, nStartM, 0, 0);
+
+            const gap = (nStartDate - cEndDate) / (1000 * 60 * 60);
+            if (gap < minRest) {
+                 if (w.min_rest_hours >= 10) return { valid: false, reason: `Inadequate Rest (${gap.toFixed(1)}h < ${minRest}h)` };
+            }
+        }
+    }
+
+    // 3. Min Days Off
+    const minDaysOff = settings.min_days_off || 0; // Treat 0 or undefined as no constraint, or use default?
+    // Usually default is 2, but if user didn't set it?
+    // If undefined, loop condition fails.
+    // Let's use 100 as safety limit for loop.
+
+    if (minDaysOff > 0) {
+        if (backward > 0) {
+            let gapSize = 0;
+            let k = backward + 1;
+            while(k < 100) {
+                const { assigns } = getAssignsAt(-k);
+                if (assigns.length === 0) gapSize++;
+                else break;
+                k++;
+                if (gapSize > minDaysOff) break;
+            }
+            if (gapSize > 0 && gapSize < minDaysOff) {
+                 if (w.min_days_off >= 10) return { valid: false, reason: `Min Days Off Violation (Prior Gap ${gapSize})` };
+            }
+        }
+        if (forward > 0) {
+            let gapSize = 0;
+            let k = forward + 1;
+            while(k < 100) {
+                const { assigns } = getAssignsAt(k);
+                if (assigns.length === 0) gapSize++;
+                else break;
+                k++;
+                if (gapSize > minDaysOff) break;
+            }
+            if (gapSize > 0 && gapSize < minDaysOff) {
+                 if (w.min_days_off >= 10) return { valid: false, reason: `Min Days Off Violation (Next Gap ${gapSize})` };
+            }
+        }
+        // Check if splitting a gap
+        if (backward === 0) {
+             let gapSize = 0;
+             let k = 1;
+             while(k < 100) {
+                 const { assigns } = getAssignsAt(-k);
+                 if (assigns.length === 0) gapSize++;
+                 else break;
+                 k++;
+                 if (gapSize > minDaysOff) break;
+             }
+             if (gapSize > 0 && gapSize < minDaysOff) {
+                 if (w.min_days_off >= 10) return { valid: false, reason: `Min Days Off Violation (Created Prior Gap ${gapSize})` };
+             }
+        }
+        if (forward === 0) {
+             let gapSize = 0;
+             let k = 1;
+             while(k < 100) {
+                 const { assigns } = getAssignsAt(k);
+                 if (assigns.length === 0) gapSize++;
+                 else break;
+                 k++;
+                 if (gapSize > minDaysOff) break;
+             }
+             if (gapSize > 0 && gapSize < minDaysOff) {
+                 if (w.min_days_off >= 10) return { valid: false, reason: `Min Days Off Violation (Created Next Gap ${gapSize})` };
+             }
+        }
+    }
+
+    return { valid: true, score: 0 };
+};
+
+const calculateScoreBiDirectional = (u, shift, dateStr, dateObj, index, settings, req, site, ruleWeights, totalAssigned) => {
+    let score = 0;
+    const w = ruleWeights || {
+        request_off: 10,
+        availability: 10,
+        target_variance: 10,
+        max_consecutive: 10,
+        min_days_off: 10,
+        circadian_strict: 10,
+        circadian_soft: 5,
+        block_size: 5,
+        weekend_fairness: 5,
+        request_work_specific: 10,
+        request_avoid_shift: 10,
+        request_work: 10,
+        min_rest_hours: 10
+    };
+    const getPenalty = (weight) => (weight || 1) * -1000;
+
+    if (req && req.type === 'off') score += getPenalty(w.request_off);
+    if (req && req.type === 'avoid' && req.shift_id === shift.id) score += getPenalty(w.request_avoid_shift);
+
+    const dayOfWeek = dateObj.getDay();
+    const specificBlockKey = `${shift.id}-${dayOfWeek}`;
+    const blocked = (settings.availability?.blocked_days?.includes(dayOfWeek)) ||
+                    (settings.availability?.blocked_shift_days?.includes(specificBlockKey)) ||
+                    (settings.availability?.blocked_shifts?.includes(shift.id));
+    if (blocked) score += getPenalty(w.availability);
+
+    const maxShifts = (settings.target_shifts || 0) + (settings.target_variance || 0);
+    if (totalAssigned >= maxShifts) score += getPenalty(w.target_variance);
+
+    const userHistory = index[u.id] || {};
+    const oneDay = 24 * 60 * 60 * 1000;
+    const getAssignsAt = (offset) => {
+        const d = new Date(dateObj);
+        d.setDate(d.getDate() + offset);
+        const s = toDateStr(d);
+        return { date: d, assigns: userHistory[s] || [] };
+    };
+
+    let backward = 0;
+    let i = 1;
+    while (true) {
+        if (getAssignsAt(-i).assigns.length > 0) backward++; else break;
+        i++;
+    }
+    let forward = 0;
+    i = 1;
+    while (true) {
+        if (getAssignsAt(i).assigns.length > 0) forward++; else break;
+        i++;
+    }
+    if (backward + 1 + forward > settings.max_consecutive) {
+        score += getPenalty(w.max_consecutive);
+    }
+
+    const prev = getAssignsAt(-1);
+    if (prev.assigns.length > 0) {
+        for (const p of prev.assigns) {
+            const pShift = p.shiftObj || p.shift;
+            if (isNightShift(pShift) && !isNightShift(shift)) {
+                const gapDays = (dateObj - new Date(prev.date)) / oneDay;
+                if (gapDays <= 1.1) score += getPenalty(w.circadian_strict);
+                else if (gapDays <= 3) score += getPenalty(w.circadian_soft);
+            }
+        }
+    }
+
+    if (req && req.type === 'work') {
+        if (req.shift_id) {
+            if (req.shift_id === shift.id) score += (w.request_work_specific * 500);
+            else score += (w.request_work * 100);
+        } else {
+            score += (w.request_work * 100);
+        }
+    }
+
+    if (!settings.no_preference && settings.shift_ranking && settings.shift_ranking.length > 0) {
+        let rankIndex = settings.shift_ranking.indexOf(shift.id);
+        if (rankIndex === -1) rankIndex = settings.shift_ranking.indexOf(shift.name);
+        if (rankIndex !== -1) {
+            score += (settings.shift_ranking.length - rankIndex) * 100;
+        }
+    }
+
+    const priority = u.category_priority !== undefined ? u.category_priority : 10;
+    const priorityFactor = Math.max(1, 11 - priority);
+    const needed = settings.target_shifts - totalAssigned;
+    if (needed > 0) score += Math.pow(needed, 2) * 50 * priorityFactor;
+    else score -= (totalAssigned - settings.target_shifts) * 50;
+
+    let weekendShifts = 0;
+    if (isWeekendShift(dateObj, shift, site)) {
+         // Approximate or scan. Let's scan briefly or just penalize current.
+         // Scanning all keys is slow?
+         // Just punish this assignment if user hates weekends?
+         // But we need accumulated count.
+         // Let's assume we can scan.
+         Object.keys(userHistory).forEach(dStr => {
+             const assigns = userHistory[dStr];
+             if (assigns.length > 0) {
+                 const [y,m,day] = dStr.split('-').map(Number);
+                 const dateO = new Date(y, m-1, day);
+                 assigns.forEach(a => {
+                      const s = a.shiftObj || a.shift;
+                      if (isWeekendShift(dateO, s, site)) weekendShifts++;
+                 });
+             }
+         });
+         score += (weekendShifts * getPenalty(w.weekend_fairness));
+    }
+
+    return score;
+};
+
+const generateSlots = (shifts, startObj, days) => {
+    const slots = [];
+    for (let i = 0; i < days; i++) {
+        const d = new Date(startObj);
+        d.setDate(startObj.getDate() + i);
+        const dayOfWeek = d.getDay();
+        const dateStr = toDateStr(d);
+
+        shifts.forEach(s => {
+            const activeDays = (s.days_of_week || '0,1,2,3,4,5,6').split(',').map(Number);
+            if (!activeDays.includes(dayOfWeek)) return;
+
+            for (let k = 0; k < s.required_staff; k++) {
+                slots.push({
+                    date: dateStr,
+                    dateObj: new Date(d),
+                    shift: s,
+                    id: `${dateStr}-${s.id}-${k}`
+                });
+            }
+        });
+    }
+    return slots;
+};
+
+const sortSlots = (slots, strategy) => {
+    switch (strategy) {
+        case 'reverse':
+            return [...slots].reverse();
+        case 'random':
+            return [...slots].sort(() => Math.random() - 0.5);
+        case 'weekends_first':
+             return [...slots].sort((a, b) => {
+                 const aW = (a.dateObj.getDay() === 0 || a.dateObj.getDay() === 6) ? 1 : 0;
+                 const bW = (b.dateObj.getDay() === 0 || b.dateObj.getDay() === 6) ? 1 : 0;
+                 return bW - aW;
+             });
+        case 'nights_first':
+             return [...slots].sort((a, b) => {
+                 const aN = isNightShift(a.shift) ? 1 : 0;
+                 const bN = isNightShift(b.shift) ? 1 : 0;
+                 return bN - aN;
+             });
+        case 'sequential':
+        default:
+            return slots;
+    }
+};
+
 const runGreedy = ({
     siteId,
     startObj,
@@ -875,10 +1263,10 @@ const runGreedy = ({
     prevAssignments: _prevAssignments = [],
     lockedAssignments: _lockedAssignments = [],
     forceMode = false,
-    site = null, // Pass site
-    ruleWeights = null // Pass weights
+    site = null,
+    ruleWeights = null,
+    strategy = 'sequential'
 } = {}) => {
-    // Ensure inputs are valid arrays/objects
     const shifts = _shifts || [];
     const users = _users || [];
     const userSettings = _userSettings || {};
@@ -886,294 +1274,182 @@ const runGreedy = ({
     const prevAssignments = _prevAssignments || [];
     const lockedAssignments = _lockedAssignments || [];
 
+    // Helper to ensure assignments have shiftObj for consistent access
+    const hydrate = (list) => list.map(a => {
+        if (a.shiftObj) return a;
+        // If coming from DB, it has flat shift props. Use itself as shiftObj or lookup.
+        // Lookup is safer to ensure we have the canonical shift object with all props.
+        const s = shifts.find(s => s.id === a.shift_id);
+        return { ...a, shiftObj: s || a };
+    });
+
+    // Build Index
+    const assignmentsMap = buildAssignmentIndex([...hydrate(prevAssignments), ...hydrate(lockedAssignments)]);
+    const assignments = [...lockedAssignments.map(a => ({
+        date: a.date,
+        shiftId: a.shift_id,
+        userId: a.user_id,
+        isLocked: true,
+        shiftName: a.shift_name,
+        shiftObj: a.shiftObj || shifts.find(s => s.id === a.shift_id) // Ensure shiftObj exists
+    }))];
+
+    const addToIndex = (a) => {
+        if (!assignmentsMap[a.userId]) assignmentsMap[a.userId] = {};
+        if (!assignmentsMap[a.userId][a.date]) assignmentsMap[a.userId][a.date] = [];
+        assignmentsMap[a.userId][a.date].push(a);
+    };
+
+    let totalScore = 0;
+    const conflictReport = [];
+    const rejectionCounts = {};
+    users.forEach(u => rejectionCounts[u.id] = {});
+
+    const allSlots = generateSlots(shifts, startObj, days);
+    const sortedSlots = sortSlots(allSlots, strategy);
+
     const requestsMap = _requestsMap || requests.reduce((map, r) => {
         if (!map[r.date]) map[r.date] = {};
         if (!map[r.date][r.user_id]) map[r.date][r.user_id] = r;
         return map;
     }, {});
 
-    let assignments = [...lockedAssignments.map(a => ({
-        date: a.date,
-        shiftId: a.shift_id,
-        userId: a.user_id,
-        isLocked: true,
-        shiftName: a.shift_name,
-        shiftObj: a
-    }))];
-
-    let totalScore = 0;
-    const conflictReport = [];
-    const rejectionCounts = {}; // { userId: { 'Availability': 5, ... } }
-
-    // Initialize User State
-    const userState = {};
+    const userCounts = {};
     users.forEach(u => {
-        const myPrev = prevAssignments.filter(a => a.user_id === u.id).sort((a,b) => new Date(a.date) - new Date(b.date));
-
-        let consecutive = 0;
-        let daysOff = 0;
-        let lastShift = null;
-        let lastDate = null;
-        let consecutiveNights = 0;
-
-        if (myPrev.length > 0) {
-            const last = myPrev[myPrev.length - 1];
-            lastShift = last;
-            lastDate = new Date(last.date);
-            const gap = (startObj - lastDate) / (1000 * 60 * 60 * 24);
-
-            if (gap <= 1) {
-                daysOff = 0;
-                consecutive = 1;
-                for(let i = myPrev.length - 2; i >= 0; i--) {
-                    const curr = new Date(myPrev[i].date);
-                    const next = new Date(myPrev[i+1].date);
-                    if ((next - curr) / (1000 * 60 * 60 * 24) === 1) {
-                        consecutive++;
-                    } else { break; }
-                }
-            } else {
-                daysOff = Math.floor(gap) - 1;
-                consecutive = 0;
-            }
-
-            // Calculate consecutiveNights (backwards from last shift if it was night)
-            if (isNightShift(lastShift) && gap <= 1) {
-                 consecutiveNights = 1;
-                 for (let i = myPrev.length - 2; i >= 0; i--) {
-                     const curr = new Date(myPrev[i].date);
-                     const next = new Date(myPrev[i+1].date);
-                     if ((next - curr) / (1000 * 60 * 60 * 24) === 1) {
-                         if (isNightShift(myPrev[i])) consecutiveNights++;
-                         else break;
-                     } else break;
-                 }
-            }
-        } else {
-            daysOff = 99;
+        userCounts[u.id] = 0;
+        if (assignmentsMap[u.id]) {
+            Object.values(assignmentsMap[u.id]).forEach(list => {
+                list.forEach(a => {
+                    const d = new Date(a.date);
+                    if (d >= startObj) userCounts[u.id]++;
+                });
+            });
         }
-
-        userState[u.id] = {
-            consecutive,
-            daysOff,
-            lastShift,
-            lastDate,
-            totalAssigned: 0,
-            hits: 0,
-            currentBlockShiftId: lastShift ? lastShift.shift_id : null,
-            currentBlockSize: consecutive,
-            weekendShifts: 0,
-            consecutiveNights
-        };
-        rejectionCounts[u.id] = {};
     });
 
-    const updateState = (uId, dateObj, shift, isWorked) => {
-        const s = userState[uId];
-        if (isWorked) {
-            s.totalAssigned++;
-            if (isWeekendShift(dateObj, shift, site)) s.weekendShifts++; // Dynamic check
+    for (const slot of sortedSlots) {
+        const filledCount = assignments.filter(a => a.date === slot.date && a.shiftId === slot.shift.id).length;
+        if (filledCount >= (slot.shift.required_staff)) continue;
 
-            if (s.daysOff === 0) s.consecutive++;
-            else s.consecutive = 1;
-            s.daysOff = 0;
+        const candidates = [];
+        const shuffledUsers = [...users].sort(() => Math.random() - 0.5);
 
-            if (s.currentBlockShiftId === shift.id) s.currentBlockSize++;
-            else {
-                s.currentBlockShiftId = shift.id;
-                s.currentBlockSize = 1;
+        for (const u of shuffledUsers) {
+            if (u.is_manual) continue;
+            const userWorkingToday = (assignmentsMap[u.id]?.[slot.date] || []).length > 0;
+            if (userWorkingToday) continue;
+
+            const settings = userSettings[u.id] || {};
+            const req = requestsMap[slot.date] ? requestsMap[slot.date][u.id] : undefined;
+            const currentCount = userCounts[u.id];
+
+            const check = checkConstraintsBiDirectional(u, slot.shift, slot.date, slot.dateObj, assignmentsMap, settings, req, ruleWeights, site, currentCount);
+
+            if (check.valid) {
+                const score = calculateScoreBiDirectional(u, slot.shift, slot.date, slot.dateObj, assignmentsMap, settings, req, site, ruleWeights, currentCount);
+                candidates.push({ user: u, score });
+            } else {
+                 const reason = check.reason || 'Unknown';
+                 if (!rejectionCounts[u.id][reason]) rejectionCounts[u.id][reason] = 0;
+                 rejectionCounts[u.id][reason]++;
             }
+        }
 
-            // Consecutive Nights Update
-            if (isNightShift(shift)) {
-                 if (s.lastShift && isNightShift(s.lastShift) && (dateObj - s.lastDate)/(1000*60*60*24) === 1) {
-                     s.consecutiveNights++;
+        candidates.sort((a, b) => {
+             const fillA = a.user.fill_first ? 1 : 0;
+             const fillB = b.user.fill_first ? 1 : 0;
+             if (fillA !== fillB) return fillB - fillA;
+             return b.score - a.score;
+        });
+
+        if (candidates.length > 0) {
+            const selected = candidates[0];
+            const newAssign = {
+                date: slot.date,
+                shiftId: slot.shift.id,
+                userId: selected.user.id,
+                isLocked: false,
+                shiftObj: slot.shift
+            };
+            assignments.push(newAssign);
+            addToIndex(newAssign);
+            userCounts[selected.user.id]++;
+            totalScore += selected.score;
+        } else {
+            if (forceMode) {
+                 const sacrificeCandidates = users.filter(u => {
+                      return !((assignmentsMap[u.id]?.[slot.date] || []).length > 0) && !u.is_manual;
+                 }).map(u => {
+                      const settings = userSettings[u.id] || {};
+                      const req = requestsMap[slot.date] ? requestsMap[slot.date][u.id] : undefined;
+                      const currentCount = userCounts[u.id];
+                      const check = checkConstraintsBiDirectional(u, slot.shift, slot.date, slot.dateObj, assignmentsMap, settings, req, ruleWeights, site, currentCount);
+                      return { user: u, failReason: check.reason, priority: u.category_priority };
+                 });
+
+                 sacrificeCandidates.sort((a,b) => {
+                      const aHard = isHardConstraint(a.failReason, ruleWeights);
+                      const bHard = isHardConstraint(b.failReason, ruleWeights);
+                      if (aHard !== bHard) return aHard ? 1 : -1;
+                      return b.priority - a.priority;
+                 });
+
+                 const validSacrifice = sacrificeCandidates.filter(c => !isHardConstraint(c.failReason, ruleWeights));
+
+                 if (validSacrifice.length > 0) {
+                     const victim = validSacrifice[0];
+                     const newAssign = {
+                        date: slot.date,
+                        shiftId: slot.shift.id,
+                        userId: victim.user.id,
+                        isLocked: false,
+                        isHit: true,
+                        hitReason: victim.failReason,
+                        shiftObj: slot.shift
+                     };
+                     assignments.push(newAssign);
+                     addToIndex(newAssign);
+                     userCounts[victim.user.id]++;
+                     totalScore -= 5000;
+                     conflictReport.push({
+                        date: slot.date,
+                        shiftId: slot.shift.id,
+                        shiftName: slot.shift.name,
+                        userId: victim.user.id,
+                        username: victim.user.username,
+                        reason: `Forced: ${victim.failReason}`
+                     });
                  } else {
-                     s.consecutiveNights = 1;
+                     conflictReport.push({
+                        date: slot.date,
+                        shiftId: slot.shift.id,
+                        shiftName: slot.shift.name,
+                        failures: sacrificeCandidates.map(c => ({ username: c.user.username, reason: c.failReason }))
+                     });
+                     totalScore -= 10000;
                  }
             } else {
-                s.consecutiveNights = 0;
-            }
+                 const failures = users.map(u => {
+                     const isWorking = (assignmentsMap[u.id]?.[slot.date] || []).length > 0;
+                     if (isWorking) return null;
 
-            s.lastShift = shift;
-            s.lastDate = dateObj;
-        } else {
-            s.consecutive = 0;
-            s.daysOff++;
-            s.currentBlockSize = 0;
-            s.currentBlockShiftId = null;
-            s.consecutiveNights = 0;
-        }
-    };
+                     const settings = userSettings[u.id] || {};
+                     const req = requestsMap[slot.date] ? requestsMap[slot.date][u.id] : undefined;
+                     const strictWeights = { max_consecutive: 10, min_days_off: 10, target_variance: 10, availability: 10, request_off: 10, circadian_strict: 10, min_rest_hours: 10, request_avoid_shift: 10 };
+                     const currentCount = userCounts[u.id];
+                     const check = checkConstraintsBiDirectional(u, slot.shift, slot.date, slot.dateObj, assignmentsMap, settings, req, strictWeights, site, currentCount);
+                     return { username: u.username, reason: check.reason };
+                 }).filter(f => f !== null);
 
-    for (let i = 0; i < days; i++) {
-        const dateObj = new Date(startObj);
-        dateObj.setDate(startObj.getDate() + i);
-        const dateStr = toDateStr(dateObj);
-
-        const lockedToday = assignments.filter(a => a.date === dateStr);
-        const lockedUserIds = new Set(lockedToday.map(a => a.userId));
-
-        // State update for locked
-        lockedToday.forEach(a => {
-            const sObj = shifts.find(s => s.id === a.shiftId) || a.shiftObj;
-            updateState(a.userId, dateObj, sObj, true);
-        });
-
-        // Slots to fill
-        const slotsToFill = [];
-        shifts.forEach(s => {
-            const activeDays = (s.days_of_week || '0,1,2,3,4,5,6').split(',').map(Number);
-            if (!activeDays.includes(dateObj.getDay())) return;
-
-            const lockedForThisShift = lockedToday.filter(a => a.shiftId === s.id);
-            const needed = Math.max(0, s.required_staff - lockedForThisShift.length);
-            for(let k=0; k<needed; k++) slotsToFill.push(s);
-        });
-
-        const assignedToday = new Set(lockedUserIds);
-        const shuffledUsers = [...users].sort(() => Math.random() - 0.5);
-        slotsToFill.sort(() => Math.random() - 0.5);
-
-        for (const shift of slotsToFill) {
-            const candidates = [];
-
-            // 1. Strict Check (Configurable Weights)
-            shuffledUsers.forEach(u => {
-                if (u.is_manual) return;
-                if (assignedToday.has(u.id)) return;
-                const state = userState[u.id];
-                const settings = userSettings[u.id];
-                const req = requestsMap[dateStr] ? requestsMap[dateStr][u.id] : undefined;
-
-                const check = checkConstraints(u, shift, dateStr, dateObj, state, settings, req, ruleWeights);
-                if (check.valid) {
-                    const score = calculateScore(u, shift, dateObj, state, settings, req, site, ruleWeights); // Pass site & weights
-                    candidates.push({ user: u, score, reason: null });
-                } else {
-                    // Track Rejection
-                    const reason = check.reason || 'Unknown';
-                    if (!rejectionCounts[u.id][reason]) rejectionCounts[u.id][reason] = 0;
-                    rejectionCounts[u.id][reason]++;
-                }
-            });
-
-            candidates.sort((a, b) => {
-                const fillA = a.user.fill_first ? 1 : 0;
-                const fillB = b.user.fill_first ? 1 : 0;
-                if (fillA !== fillB) return fillB - fillA; // Fill First users first
-                return b.score - a.score;
-            });
-
-            if (candidates.length > 0) {
-                const selected = candidates[0];
-                assignments.push({
-                    date: dateStr,
-                    shiftId: shift.id,
-                    userId: selected.user.id,
-                    isLocked: false
-                });
-                assignedToday.add(selected.user.id);
-                totalScore += selected.score;
-                updateState(selected.user.id, dateObj, shift, true);
-            } else {
-                if (forceMode) {
-                    // Manual Users should NOT be candidates for sacrifice
-                    const sacrificeCandidates = users.filter(u => !assignedToday.has(u.id) && !u.is_manual).map(u => {
-                        const state = userState[u.id];
-                        const settings = userSettings[u.id];
-                        const req = requestsMap[dateStr] ? requestsMap[dateStr][u.id] : undefined;
-                        // Use strict weights (all 10) to find the reason for failure
-                        const strictWeights = { max_consecutive: 10, min_days_off: 10, target_variance: 10, availability: 10, request_off: 10, circadian_strict: 10, min_rest_hours: 10, request_avoid_shift: 10 };
-                        const check = checkConstraints(u, shift, dateStr, dateObj, state, settings, req, strictWeights);
-                        return {
-                            user: u,
-                            failReason: check.reason,
-                            hits: state.hits,
-                            priority: u.category_priority
-                        };
-                    });
-
-                    sacrificeCandidates.sort((a, b) => {
-                        const aHard = isHardConstraint(a.failReason, ruleWeights);
-                        const bHard = isHardConstraint(b.failReason, ruleWeights);
-                        if (aHard !== bHard) return aHard ? 1 : -1;
-                        if (a.priority !== b.priority) return b.priority - a.priority;
-                        return a.hits - b.hits;
-                    });
-                    // Filter out Hard Constraints from sacrifice list
-                    const validSacrificeCandidates = sacrificeCandidates.filter(c => !isHardConstraint(c.failReason, ruleWeights));
-
-                    if (validSacrificeCandidates.length > 0) {
-                        const victim = validSacrificeCandidates[0];
-                        assignments.push({
-                            date: dateStr,
-                            shiftId: shift.id,
-                            userId: victim.user.id,
-                            isLocked: false,
-                            isHit: true,
-                            hitReason: victim.failReason
-                        });
-                        assignedToday.add(victim.user.id);
-                        userState[victim.user.id].hits++;
-
-                        conflictReport.push({
-                            date: dateStr,
-                            shiftId: shift.id,
-                            shiftName: shift.name,
-                            userId: victim.user.id,
-                            username: victim.user.username,
-                            reason: `Forced: ${victim.failReason}`
-                        });
-
-                        updateState(victim.user.id, dateObj, shift, true);
-                        totalScore -= 5000;
-
-                    } else {
-                        // All candidates blocked by Hard Constraints (or already working)
-                        const failures = users.filter(u => !assignedToday.has(u.id)).map(u => {
-                            const state = userState[u.id];
-                            const settings = userSettings[u.id];
-                            const req = requestsMap[dateStr] ? requestsMap[dateStr][u.id] : undefined;
-                            // Check strictly to show why they failed
-                            const strictWeights = { max_consecutive: 10, min_days_off: 10, target_variance: 10, availability: 10, request_off: 10, circadian_strict: 10, min_rest_hours: 10, request_avoid_shift: 10 };
-                            const check = checkConstraints(u, shift, dateStr, dateObj, state, settings, req, strictWeights);
-                            return { username: u.username, reason: check.reason };
-                        });
-
-                        conflictReport.push({
-                            date: dateStr,
-                            shiftId: shift.id,
-                            shiftName: shift.name,
-                            failures
-                        });
-                        totalScore -= 10000;
-                    }
-                } else {
-                    const failures = users.filter(u => !assignedToday.has(u.id)).map(u => {
-                         const state = userState[u.id];
-                         const settings = userSettings[u.id];
-                         const req = requestsMap[dateStr] ? requestsMap[dateStr][u.id] : undefined;
-                         // Check strictly to show why they failed
-                         const strictWeights = { max_consecutive: 10, min_days_off: 10, target_variance: 10, availability: 10, request_off: 10, circadian_strict: 10, min_rest_hours: 10 };
-                         const check = checkConstraints(u, shift, dateStr, dateObj, state, settings, req, strictWeights);
-                         return { username: u.username, reason: check.reason };
-                    });
-                    conflictReport.push({
-                        date: dateStr,
-                        shiftId: shift.id,
-                        shiftName: shift.name,
-                        failures
-                    });
-                    totalScore -= 10000;
-                }
+                 conflictReport.push({
+                    date: slot.date,
+                    shiftId: slot.shift.id,
+                    shiftName: slot.shift.name,
+                    failures
+                 });
+                 totalScore -= 10000;
             }
         }
-        users.forEach(u => {
-            if (!assignedToday.has(u.id)) {
-                updateState(u.id, dateObj, null, false);
-            }
-        });
     }
 
     return { assignments, score: totalScore, conflictReport, rejectionCounts };
@@ -1198,6 +1474,11 @@ if (typeof module !== 'undefined') {
         isNightShift,
         isWeekendShift, // Export
         toDateStr,
-        isHardConstraint
+        isHardConstraint,
+        checkConstraintsBiDirectional,
+        calculateScoreBiDirectional,
+        buildAssignmentIndex,
+        generateSlots,
+        sortSlots
     };
 }
