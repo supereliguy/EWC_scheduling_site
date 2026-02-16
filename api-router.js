@@ -265,9 +265,10 @@ api.put('/api/settings/global', (req, res) => {
     const s = req.body;
     window.db.transaction(() => {
         const stmt = window.db.prepare('INSERT OR REPLACE INTO global_settings (key, value) VALUES (?, ?)');
-        for(const k in s) {
-            stmt.run(k, String(s[k]));
-        }
+        Object.keys(s).forEach(k => {
+            const val = (s[k] === undefined || s[k] === null) ? '' : String(s[k]);
+            stmt.run(k, val);
+        });
     })();
     res.json({ message: 'Global settings saved' });
 });
