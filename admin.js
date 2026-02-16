@@ -435,6 +435,10 @@ window.loadGlobalSettings = async (btn) => {
         document.getElementById('gs-min-consecutive-nights').value = s.min_consecutive_nights || 2;
         document.getElementById('gs-min-rest-hours').value = s.min_rest_hours || 12;
 
+        // Fair Distribution Toggle
+        const enableFairDist = s.enable_fair_distribution !== undefined ? !!s.enable_fair_distribution : true;
+        document.getElementById('gs-enable-fair-distribution').checked = enableFairDist;
+
         // Weights
         document.getElementById('rw-availability').value = s.rule_weight_availability || 10;
         document.getElementById('rw-request-off').value = s.rule_weight_request_off || 10;
@@ -462,6 +466,7 @@ window.saveGlobalSettings = async () => {
         preferred_block_size: document.getElementById('gs-block-size').value,
         min_consecutive_nights: document.getElementById('gs-min-consecutive-nights').value,
         min_rest_hours: document.getElementById('gs-min-rest-hours').value,
+        enable_fair_distribution: document.getElementById('gs-enable-fair-distribution').checked,
         night_preference: 1.0,
 
         // Weights
@@ -1336,6 +1341,21 @@ async function runScheduleGeneration(force) {
 
         loadSchedule();
 
+        // Show Conflict Report or Success Report
+        if (res.conflictReport && res.conflictReport.length > 0) {
+            renderConflictReport(res.conflictReport, res.rejectionCounts, res.effectiveUserSettings);
+            const modal = new bootstrap.Modal(document.getElementById('conflictModal'));
+            modal.show();
+        } else {
+             // Show success modal with distribution stats?
+             // For now, reuse conflict modal structure but for success stats
+             renderConflictReport([], res.rejectionCounts, res.effectiveUserSettings, true);
+             const modal = new bootstrap.Modal(document.getElementById('conflictModal'));
+             document.querySelector('#conflictModal .modal-title').textContent = "Generation Complete";
+             document.querySelector('#conflictModal .modal-header').className = "modal-header bg-success text-white";
+             modal.show();
+        }
+
     } catch (e) {
         window.showToast(e.message, 'danger');
         statusEl.classList.add('d-none');
@@ -1345,27 +1365,108 @@ async function runScheduleGeneration(force) {
     }
 }
 
-function renderConflictReport(report) {
+function renderConflictReport(report, rejectionCounts, effectiveUserSettings, isSuccess) {
     const container = document.getElementById('conflict-report-list');
     container.innerHTML = '';
 
-    report.forEach(item => {
-        let html = `<div class="card mb-2"><div class="card-body py-2">
-            <h6 class="card-title text-danger">${escapeHTML(item.date)} - ${escapeHTML(item.shiftName)}</h6>`;
+    const title = document.querySelector('#conflictModal .modal-title');
+    const header = document.querySelector('#conflictModal .modal-header');
 
-        if (item.failures) {
-            html += `<ul class="small mb-0 text-secondary">`;
-            item.failures.forEach(f => {
-                html += `<li><strong>${escapeHTML(f.username)}:</strong> ${escapeHTML(f.reason)}</li>`;
+    if (isSuccess) {
+        title.textContent = "Schedule Generated Successfully";
+        header.className = "modal-header bg-success text-white";
+        document.querySelector('#conflictModal .lead').textContent = "Distribution Analysis:";
+        document.querySelector('#conflictModal .alert-info').classList.add('d-none'); // Hide Force recommendation
+        document.querySelector('#conflictModal .btn-danger').classList.add('d-none'); // Hide Force button
+    } else {
+        title.textContent = "Schedule Conflicts Detected";
+        header.className = "modal-header bg-warning";
+        document.querySelector('#conflictModal .lead').textContent = "The schedule could not be fully generated due to constraints:";
+        document.querySelector('#conflictModal .alert-info').classList.remove('d-none');
+        document.querySelector('#conflictModal .btn-danger').classList.remove('d-none');
+    }
+
+    // 1. Conflicts
+    if (report && report.length > 0) {
+        container.innerHTML += '<h6 class="text-danger border-bottom pb-2">Unfilled Shifts</h6>';
+        report.forEach(item => {
+            let html = `<div class="card mb-2 border-danger"><div class="card-body py-2">
+                <h6 class="card-title text-danger mb-1">${escapeHTML(item.date)} - ${escapeHTML(item.shiftName)}</h6>`;
+
+            if (item.failures) {
+                html += `<div class="small text-secondary" style="max-height: 100px; overflow-y: auto;">`;
+                // Group reasons to save space
+                const reasonCounts = {};
+                item.failures.forEach(f => {
+                    if(!reasonCounts[f.reason]) reasonCounts[f.reason] = 0;
+                    reasonCounts[f.reason]++;
+                });
+
+                Object.keys(reasonCounts).forEach(r => {
+                     html += `<div>${reasonCounts[r]} users blocked by: <strong>${escapeHTML(r)}</strong></div>`;
+                });
+                html += `</div>`;
+            } else if (item.reason) {
+                html += `<p class="mb-0 text-danger small">${escapeHTML(item.reason)} ${item.username ? '('+escapeHTML(item.username)+')' : ''}</p>`;
+            }
+
+            html += `</div></div>`;
+            container.innerHTML += html;
+        });
+        container.innerHTML += '<hr>';
+    }
+
+    // 2. Distribution Analysis Table
+    if (effectiveUserSettings && rejectionCounts) {
+        container.innerHTML += '<h6 class="text-primary mt-3 border-bottom pb-2">Fairness & Constraints Analysis</h6>';
+
+        let tableHtml = `<div class="table-responsive"><table class="table table-sm table-striped small">
+            <thead><tr>
+                <th>User</th>
+                <th>Target (Adj)</th>
+                <th>Assigned</th>
+                <th>Diff</th>
+                <th>Top Blocker</th>
+            </tr></thead><tbody>`;
+
+        // Must fetch assignments to count current totals.
+        // But assignments are not passed here, they are in memory or need fetching.
+        // Wait, 'loadSchedule' runs AFTER generation but async.
+        // We can just query the DOM or rely on the fact that loadSchedule refreshes shortly.
+        // Ideally the API response should include the assignment counts to display here.
+        // But for now, we can show what we know or just show Rejection Counts.
+
+        // Let's iterate users from global 'users' array
+        users.forEach(u => {
+            const s = effectiveUserSettings[u.id] || {};
+            const target = s.target_shifts || 0;
+
+            // Rejections
+            const rejections = rejectionCounts[u.id] || {};
+            // Find top rejection
+            let topReason = '-';
+            let topCount = 0;
+            Object.entries(rejections).forEach(([r, c]) => {
+                if (c > topCount) { topCount = c; topReason = r; }
             });
-            html += `</ul>`;
-        } else if (item.reason) {
-            html += `<p class="mb-0 text-danger small">${escapeHTML(item.reason)} ${item.username ? '('+escapeHTML(item.username)+')' : ''}</p>`;
-        }
 
-        html += `</div></div>`;
-        container.innerHTML += html;
-    });
+            // We don't have assigned count easily here without parsing the result assignments array if passed.
+            // Let's assume we can't show "Assigned" accurately in this modal unless we pass it.
+            // But we can show Top Blocker which is what the user asked for.
+
+            tableHtml += `<tr>
+                <td>${escapeHTML(u.username)}</td>
+                <td>${target}</td>
+                <td class="text-muted">--</td>
+                <td class="text-muted">--</td>
+                <td>${topCount > 0 ? `${escapeHTML(topReason)} (${topCount})` : '<span class="text-success">None</span>'}</td>
+            </tr>`;
+        });
+
+        tableHtml += `</tbody></table></div>`;
+        container.innerHTML += tableHtml;
+        container.innerHTML += `<div class="text-muted small mt-1">Note: "Target (Adj)" shows the fair share calculated based on total available shifts.</div>`;
+    }
 }
 
 async function loadSchedule() {

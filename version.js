@@ -1,5 +1,15 @@
-window.APP_VERSION = "3.1.0";
+window.APP_VERSION = "3.2.0";
 window.CHANGELOG = [
+    {
+        version: "3.2.0",
+        date: "2024-05-23",
+        changes: [
+            "Introduced 'Fair Distribution' logic: automatically scales user targets based on total available shifts.",
+            "Implemented squared scoring weights to prioritize users who are furthest behind their target.",
+            "Added 'Distribution & Constraints Analysis' table to the generation report.",
+            "Now tracking and displaying the top reason preventing each user from getting more shifts (e.g. Availability, Rest)."
+        ]
+    },
     {
         version: "3.1.0",
         date: "2024-05-22",

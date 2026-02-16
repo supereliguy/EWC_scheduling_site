@@ -65,12 +65,12 @@ describe('calculateScore Weekend Penalty', () => {
         };
         const settings = { target_shifts: 10, shift_ranking: [] };
 
-        // Base score (needed) = 10 * 50 * 1 = 500
+        // Base score (needed) = 10^2 * 50 * 1 = 5000 (New Squared Logic)
         // Penalty = 2 * 5000 (Weight 5) = 10000
-        // Net = -9500
+        // Net = -5000
 
         const score = calculateScore(u, shift, date, state, settings, null, config);
-        expect(score).toBe(500 - 10000);
+        expect(score).toBe(5000 - 10000);
     });
 
     test('should NOT penalize non-weekend shift', () => {
@@ -83,7 +83,8 @@ describe('calculateScore Weekend Penalty', () => {
         };
         const settings = { target_shifts: 10, shift_ranking: [] };
 
+        // Base score (needed) = 10^2 * 50 * 1 = 5000
         const score = calculateScore(u, shift, date, state, settings, null, config);
-        expect(score).toBe(500); // No penalty
+        expect(score).toBe(5000); // No penalty
     });
 });

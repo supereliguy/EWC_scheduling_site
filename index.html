@@ -99,6 +99,13 @@
                         <div class="col-12 mb-3"><label>Preferred Block Size</label><input type="number" class="form-control" id="gs-block-size"></div>
                         <div class="col-12 mb-3"><label>Min Consecutive Nights</label><input type="number" class="form-control" id="gs-min-consecutive-nights" value="2"></div>
                         <div class="col-12 mb-3"><label>Min Rest Hours (Hard Floor)</label><input type="number" class="form-control" id="gs-min-rest-hours" value="12" step="0.5"></div>
+                        <div class="col-12 mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="gs-enable-fair-distribution" checked>
+                                <label class="form-check-label fw-bold" for="gs-enable-fair-distribution">Enable Fair Distribution</label>
+                                <div class="form-text small">If checked, the scheduler will dynamically adjust targets to ensure all users are treated equally relative to available shifts.</div>
+                            </div>
+                        </div>
                     </div>
 
                     <hr class="my-4">

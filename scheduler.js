@@ -174,6 +174,9 @@ const fetchScheduleContext = ({ siteId, startDate, days }) => {
         };
     });
 
+    // Fair Distribution Settings
+    const enableFairDist = globalSettings.enable_fair_distribution !== undefined ? (globalSettings.enable_fair_distribution === 'true' || globalSettings.enable_fair_distribution === 1) : true;
+
     const requests = db.prepare(`
         SELECT user_id, date, type, shift_id FROM requests
         WHERE site_id = ? AND date BETWEEN ? AND ?
@@ -190,7 +193,8 @@ const fetchScheduleContext = ({ siteId, startDate, days }) => {
         shifts, users, userSettings, requests, requestsMap,
         prevAssignments, lockedAssignments, currentAssignments,
         site, // Add site to context
-        ruleWeights // Add weights to context
+        ruleWeights, // Add weights to context
+        enableFairDist // Add fair distribution toggle
     };
 };
 
@@ -205,6 +209,45 @@ const generateSchedule = async ({ siteId, startDate, days, force, iterations, on
     const maxIterations = iterations ? parseInt(iterations) : (force ? 1 : 100);
     const MAX_TIME_MS = iterations ? (iterations * 100) : 3000;
     const MAX_STAGNANT_ITERATIONS = iterations ? Math.ceil(iterations / 2) : 20;
+
+    // Fair Distribution Logic (Pre-calculation)
+    let effectiveUserSettings = ctx.userSettings;
+    if (ctx.enableFairDist) {
+        // Calculate total slots needed
+        let totalSlots = 0;
+        for (let i = 0; i < days; i++) {
+             const d = new Date(ctx.startObj);
+             d.setDate(ctx.startObj.getDate() + i);
+             const dayOfWeek = d.getDay();
+             ctx.shifts.forEach(s => {
+                 const activeDays = (s.days_of_week || '0,1,2,3,4,5,6').split(',').map(Number);
+                 if (activeDays.includes(dayOfWeek)) {
+                     totalSlots += s.required_staff;
+                 }
+             });
+        }
+
+        // Calculate total requested targets
+        let totalRequested = 0;
+        ctx.users.forEach(u => {
+            const s = ctx.userSettings[u.id];
+            totalRequested += (s.target_shifts || 0);
+        });
+
+        // If mismatch, scale targets
+        if (totalRequested > 0 && totalSlots > 0 && totalRequested !== totalSlots) {
+            const ratio = totalSlots / totalRequested;
+            effectiveUserSettings = {};
+            // Deep copy and adjust
+            Object.keys(ctx.userSettings).forEach(uid => {
+                 const s = ctx.userSettings[uid];
+                 effectiveUserSettings[uid] = { ...s };
+                 // Adjust target
+                 const newTarget = Math.max(1, Math.round(s.target_shifts * ratio));
+                 effectiveUserSettings[uid].target_shifts = newTarget;
+            });
+        }
+    }
 
     let bestResult = null;
     let bestScore = -Infinity;
@@ -222,7 +265,7 @@ const generateSchedule = async ({ siteId, startDate, days, force, iterations, on
             siteId, startObj: ctx.startObj, days,
             shifts: ctx.shifts,
             users: ctx.users,
-            userSettings: ctx.userSettings,
+            userSettings: effectiveUserSettings, // Use scaled settings
             requests: ctx.requests,
             requestsMap: ctx.requestsMap,
             prevAssignments: ctx.prevAssignments,
@@ -277,7 +320,9 @@ const generateSchedule = async ({ siteId, startDate, days, force, iterations, on
     return {
         assignments: bestResult.assignments,
         conflictReport: bestResult.conflictReport,
-        success: isComplete
+        success: isComplete,
+        rejectionCounts: bestResult.rejectionCounts,
+        effectiveUserSettings: (ctx.enableFairDist && effectiveUserSettings) ? effectiveUserSettings : ctx.userSettings // Return effective targets
     };
 };
 
@@ -532,7 +577,8 @@ const calculateScore = (u, shift, dateObj, state, settings, req, site, ruleWeigh
     const needed = settings.target_shifts - state.totalAssigned;
     // Score increases as they get closer to target, but decreases if they exceed it
     if (needed > 0) {
-        score += needed * 50 * priorityFactor;
+        // Squared scoring to aggressively target needy users
+        score += Math.pow(needed, 2) * 50 * priorityFactor;
     } else {
         // Discourage going over target if possible (soft penalty)
         score -= (state.totalAssigned - settings.target_shifts) * 50;
@@ -857,6 +903,7 @@ const runGreedy = ({
 
     let totalScore = 0;
     const conflictReport = [];
+    const rejectionCounts = {}; // { userId: { 'Availability': 5, ... } }
 
     // Initialize User State
     const userState = {};
@@ -918,6 +965,7 @@ const runGreedy = ({
             weekendShifts: 0,
             consecutiveNights
         };
+        rejectionCounts[u.id] = {};
     });
 
     const updateState = (uId, dateObj, shift, isWorked) => {
@@ -1002,6 +1050,11 @@ const runGreedy = ({
                 if (check.valid) {
                     const score = calculateScore(u, shift, dateObj, state, settings, req, site, ruleWeights); // Pass site & weights
                     candidates.push({ user: u, score, reason: null });
+                } else {
+                    // Track Rejection
+                    const reason = check.reason || 'Unknown';
+                    if (!rejectionCounts[u.id][reason]) rejectionCounts[u.id][reason] = 0;
+                    rejectionCounts[u.id][reason]++;
                 }
             });
 
@@ -1105,7 +1158,7 @@ const runGreedy = ({
         });
     }
 
-    return { assignments, score: totalScore, conflictReport };
+    return { assignments, score: totalScore, conflictReport, rejectionCounts };
 };
 
 if (typeof window !== 'undefined') {
