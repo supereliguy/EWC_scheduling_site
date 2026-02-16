@@ -18,15 +18,15 @@ body {
     font-family: var(--font-main);
     margin: 0;
     padding: 0;
-    font-size: 16px;
-    line-height: 1.5;
+    font-size: 15px; /* Tighter default */
+    line-height: 1.4;
 }
 
 /* Typography & Contrast */
 h1, h2, h3, h4, h5, h6 {
     color: #ffffff;
     font-weight: 600;
-    margin-bottom: 1rem;
+    margin-bottom: 0.75rem;
     letter-spacing: -0.02em;
 }
 
@@ -81,8 +81,9 @@ a:hover {
 /* Buttons - Premier Feel */
 .btn {
     font-weight: 500;
-    border-radius: 6px;
-    padding: 6px 16px;
+    border-radius: 4px;
+    padding: 5px 12px;
+    font-size: 0.95rem;
     transition: all 0.2s ease-in-out;
 }
 
@@ -126,7 +127,7 @@ a:hover {
 }
 
 .table th, .table td {
-    padding: 12px 16px;
+    padding: 8px 12px; /* Tighter cells */
     border-bottom: 1px solid var(--border-color);
     vertical-align: middle;
 }
@@ -204,9 +205,9 @@ a:hover {
 .section-content {
     background: var(--card-bg);
     border: 1px solid var(--border-color);
-    padding: 30px;
-    border-radius: 12px; /* Softer corners */
-    margin-bottom: 30px;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
 }
 
 /* Calendar Grid (Requests & New Month View) */
