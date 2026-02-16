@@ -264,6 +264,16 @@ const generateSchedule = async ({ siteId, startDate, days, force, iterations, on
 
         const currentStrategy = strategies[i % strategies.length];
 
+        // Vary randomness to escape local optima
+        // Cycle: Pure Greedy -> Low Randomness -> Medium Randomness
+        let currentRandomness = 0;
+        if (maxIterations > 1) {
+             const cycle = i % 20;
+             if (cycle < 5) currentRandomness = 0;       // 25% Pure Greedy
+             else if (cycle < 15) currentRandomness = 0.25; // 50% Slight perturbation (Top 2)
+             else currentRandomness = 0.5;              // 25% More exploration (Top 3)
+        }
+
         const result = runGreedy({
             siteId, startObj: ctx.startObj, days,
             shifts: ctx.shifts,
@@ -276,7 +286,8 @@ const generateSchedule = async ({ siteId, startDate, days, force, iterations, on
             forceMode: !!force,
             site: ctx.site, // Pass site
             ruleWeights: ctx.ruleWeights, // Pass weights
-            strategy: currentStrategy
+            strategy: currentStrategy,
+            randomness: currentRandomness
         });
 
         if (result.score > bestScore) {
@@ -1265,7 +1276,8 @@ const runGreedy = ({
     forceMode = false,
     site = null,
     ruleWeights = null,
-    strategy = 'sequential'
+    strategy = 'sequential',
+    randomness = 0
 } = {}) => {
     const shifts = _shifts || [];
     const users = _users || [];
@@ -1363,7 +1375,32 @@ const runGreedy = ({
         });
 
         if (candidates.length > 0) {
-            const selected = candidates[0];
+            let selectedIndex = 0;
+            // Probabilistic selection from top candidates
+            if (randomness > 0 && candidates.length > 1) {
+                // Determine pool size based on randomness (e.g. 0.5 -> ~3, 1.0 -> ~5)
+                const maxPool = 1 + Math.floor(randomness * 4);
+                const poolSize = Math.min(candidates.length, maxPool);
+
+                // Respect fill_first priority
+                const bestFillFirst = candidates[0].user.fill_first;
+
+                // Identify valid pool indices
+                const pool = [];
+                for(let k=0; k<poolSize; k++) {
+                    if (candidates[k].user.fill_first === bestFillFirst) {
+                        pool.push(k);
+                    } else {
+                        break;
+                    }
+                }
+
+                if (pool.length > 0) {
+                    selectedIndex = pool[Math.floor(Math.random() * pool.length)];
+                }
+            }
+
+            const selected = candidates[selectedIndex];
             const newAssign = {
                 date: slot.date,
                 shiftId: slot.shift.id,
