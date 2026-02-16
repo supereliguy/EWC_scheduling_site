@@ -423,14 +423,14 @@ class DBWrapper {
         const stmt = this.db.prepare(sql);
         const wrapper = {
             all: (...params) => {
-                stmt.bind(params);
+                stmt.bind(params.map(p => p === undefined ? null : p));
                 const res = [];
                 while(stmt.step()) res.push(stmt.getAsObject());
                 stmt.reset();
                 return res;
             },
             run: (...params) => {
-                stmt.run(params);
+                stmt.run(params.map(p => p === undefined ? null : p));
 
                 // Optimized lastId retrieval
                 if (!this.lastIdStmt) {
@@ -454,7 +454,7 @@ class DBWrapper {
                 return { lastInsertRowid: lastId, changes: this.db.getRowsModified() };
             },
             get: (...params) => {
-                stmt.bind(params);
+                stmt.bind(params.map(p => p === undefined ? null : p));
                 let res = null;
                 if(stmt.step()) res = stmt.getAsObject();
                 stmt.reset();

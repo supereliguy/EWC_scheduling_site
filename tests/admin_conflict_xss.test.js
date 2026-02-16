@@ -9,7 +9,17 @@ describe('Admin Conflict Report XSS Vulnerability Check', () => {
     let container;
 
     beforeEach(() => {
-        document.body.innerHTML = '<div id="conflict-report-list"></div>';
+        document.body.innerHTML = `
+            <div id="conflict-report-list"></div>
+            <div id="conflictModal">
+                <div class="modal-header"><h5 class="modal-title"></h5></div>
+                <div class="modal-body">
+                    <p class="lead"></p>
+                    <div class="alert alert-info"></div>
+                </div>
+                <div class="modal-footer"><button class="btn btn-danger"></button></div>
+            </div>
+        `;
         container = document.getElementById('conflict-report-list');
     });
 
@@ -23,7 +33,7 @@ describe('Admin Conflict Report XSS Vulnerability Check', () => {
         }
 
         // Extract renderConflictReport function
-        const renderConflictReportMatch = adminJsContent.match(/function renderConflictReport\(report\) \{[\s\S]*?\n\}/);
+        const renderConflictReportMatch = adminJsContent.match(/function renderConflictReport\([\s\S]*?\) \{[\s\S]*?\n\}/);
         if (!renderConflictReportMatch) {
             throw new Error('Could not find renderConflictReport in admin.js');
         }
