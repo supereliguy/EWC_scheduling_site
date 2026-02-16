@@ -1347,13 +1347,13 @@ async function runScheduleGeneration(force) {
 
         // Show Conflict Report or Success Report
         if (res.conflictReport && res.conflictReport.length > 0) {
-            renderConflictReport(res.conflictReport, res.rejectionCounts, res.effectiveUserSettings);
+            renderConflictReport(res.conflictReport, res.rejectionCounts, res.effectiveUserSettings, false, params.siteId);
             const modal = new bootstrap.Modal(document.getElementById('conflictModal'));
             modal.show();
         } else {
              // Show success modal with distribution stats?
              // For now, reuse conflict modal structure but for success stats
-             renderConflictReport([], res.rejectionCounts, res.effectiveUserSettings, true);
+             renderConflictReport([], res.rejectionCounts, res.effectiveUserSettings, true, params.siteId);
              const modal = new bootstrap.Modal(document.getElementById('conflictModal'));
              document.querySelector('#conflictModal .modal-title').textContent = "Generation Complete";
              document.querySelector('#conflictModal .modal-header').className = "modal-header bg-success text-white";
@@ -1369,7 +1369,7 @@ async function runScheduleGeneration(force) {
     }
 }
 
-function renderConflictReport(report, rejectionCounts, effectiveUserSettings, isSuccess) {
+function renderConflictReport(report, rejectionCounts, effectiveUserSettings, isSuccess, siteId) {
     const container = document.getElementById('conflict-report-list');
     container.innerHTML = '';
 
@@ -1394,22 +1394,31 @@ function renderConflictReport(report, rejectionCounts, effectiveUserSettings, is
     if (report && report.length > 0) {
         container.innerHTML += '<h6 class="text-danger border-bottom pb-2">Unfilled Shifts</h6>';
         report.forEach(item => {
-            let html = `<div class="card mb-2 border-danger"><div class="card-body py-2">
-                <h6 class="card-title text-danger mb-1">${escapeHTML(item.date)} - ${escapeHTML(item.shiftName)}</h6>`;
+            let html = `<div class="card mb-3 border-danger shadow-sm"><div class="card-body py-2">
+                <h6 class="card-title text-danger mb-2 border-bottom pb-1">${escapeHTML(item.date)} - ${escapeHTML(item.shiftName)}</h6>`;
 
             if (item.failures) {
-                html += `<div class="small text-secondary" style="max-height: 100px; overflow-y: auto;">`;
-                // Group reasons to save space
-                const reasonCounts = {};
+                html += `<div class="table-responsive" style="max-height: 200px; overflow-y: auto;">
+                    <table class="table table-sm table-striped small mb-0">
+                    <thead class="table-light" style="position: sticky; top: 0;">
+                        <tr><th>User</th><th>Constraint</th><th>Action</th></tr>
+                    </thead>
+                    <tbody>`;
+
                 item.failures.forEach(f => {
-                    if(!reasonCounts[f.reason]) reasonCounts[f.reason] = 0;
-                    reasonCounts[f.reason]++;
+                    html += `<tr>
+                        <td>${escapeHTML(f.username)}</td>
+                        <td class="text-danger">${escapeHTML(f.reason)}</td>
+                        <td>
+                            <button class="btn btn-xs btn-outline-danger py-0 px-2"
+                                onclick="forceAssignUser(${siteId}, '${item.date}', '${item.shiftId}', ${f.userId}, this)">
+                                Force
+                            </button>
+                        </td>
+                    </tr>`;
                 });
 
-                Object.keys(reasonCounts).forEach(r => {
-                     html += `<div>${reasonCounts[r]} users blocked by: <strong>${escapeHTML(r)}</strong></div>`;
-                });
-                html += `</div>`;
+                html += `</tbody></table></div>`;
             } else if (item.reason) {
                 html += `<p class="mb-0 text-danger small">${escapeHTML(item.reason)} ${item.username ? '('+escapeHTML(item.username)+')' : ''}</p>`;
             }
@@ -2466,6 +2475,42 @@ function renderScheduleSimpleView(container, params, assignments, requests, shif
     html += '</tbody></table></div>';
     container.innerHTML = html;
 }
+
+window.forceAssignUser = async (siteId, date, shiftId, userId, btn) => {
+    if (!confirm('Force assign this user? This will override constraints and lock the assignment.')) return;
+
+    // Disable button to prevent double click
+    btn.disabled = true;
+    btn.textContent = '...';
+
+    try {
+        await apiClient.put('/api/schedule/assignment', { siteId, date, userId, shiftId, isLocked: true });
+        window.showToast('User forced successfully', 'success');
+
+        // Remove the card from the modal
+        const card = btn.closest('.card');
+        if (card) card.remove();
+
+        // Refresh schedule in background
+        loadSchedule();
+
+        // If no more cards, update modal title or close?
+        // Let's keep it open so they can see stats if they want, or close if empty.
+        const list = document.getElementById('conflict-report-list');
+        if (list && list.querySelectorAll('.card').length === 0) {
+             // Maybe show success message inside modal instead?
+             const alert = document.createElement('div');
+             alert.className = 'alert alert-success';
+             alert.textContent = 'All conflicts resolved manually.';
+             list.prepend(alert);
+        }
+
+    } catch(e) {
+        window.showToast('Error forcing user: ' + e.message, 'danger');
+        btn.disabled = false;
+        btn.textContent = 'Force';
+    }
+};
 
 window.exportScheduleCSV = async () => {
     const params = getScheduleParams();
