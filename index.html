@@ -127,6 +127,21 @@
                                     <td><small class="text-muted">Respect user's "Off" requests.</small></td>
                                 </tr>
                                 <tr>
+                                    <td>Request Work (Specific)</td>
+                                    <td><input type="number" class="form-control" id="rw-request-work-specific" min="1" max="10" value="10"></td>
+                                    <td><small class="text-muted">Bonus for granting a specific shift request (Green).</small></td>
+                                </tr>
+                                <tr>
+                                    <td>Request Work (Any)</td>
+                                    <td><input type="number" class="form-control" id="rw-request-work" min="1" max="10" value="10"></td>
+                                    <td><small class="text-muted">Bonus for granting a general work request.</small></td>
+                                </tr>
+                                <tr>
+                                    <td>Request Avoid Shift</td>
+                                    <td><input type="number" class="form-control" id="rw-request-avoid-shift" min="1" max="10" value="10"></td>
+                                    <td><small class="text-muted">Penalty for assigning a shift marked as "Avoid" (Orange).</small></td>
+                                </tr>
+                                <tr>
                                     <td>Max Consecutive Shifts</td>
                                     <td><input type="number" class="form-control" id="rw-max-consecutive" min="1" max="10" value="10"></td>
                                     <td><small class="text-muted">Do not exceed the maximum number of consecutive working days.</small></td>
