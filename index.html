@@ -90,115 +90,124 @@
 
                 <!-- Global Settings Section -->
                 <div id="global-settings-section" class="section-content">
-                    <h3>Global Scheduling Defaults</h3>
-                    <p class="text-muted small">These settings apply to users who have not set specific preferences.</p>
-                    <div class="row g-3" style="max-width: 800px;">
-                        <div class="col-md-6"><label class="form-label small fw-bold">Max Consecutive Shifts</label><input type="number" class="form-control" id="gs-max-consecutive"></div>
-                        <div class="col-md-6"><label class="form-label small fw-bold">Min Days Off</label><input type="number" class="form-control" id="gs-min-days-off"></div>
-                        <div class="col-md-6"><label class="form-label small fw-bold">Target Shifts</label><input type="number" class="form-control" id="gs-target-shifts"></div>
-                        <div class="col-md-6"><label class="form-label small fw-bold">Target Variance</label><input type="number" class="form-control" id="gs-variance"></div>
-                        <div class="col-md-6"><label class="form-label small fw-bold">Preferred Block Size</label><input type="number" class="form-control" id="gs-block-size"></div>
-                        <div class="col-md-6"><label class="form-label small fw-bold">Min Consecutive Nights</label><input type="number" class="form-control" id="gs-min-consecutive-nights" value="2"></div>
-                        <div class="col-md-6"><label class="form-label small fw-bold">Min Rest Hours (Hard Floor)</label><input type="number" class="form-control" id="gs-min-rest-hours" value="12" step="0.5"></div>
-                        <div class="col-12">
-                            <div class="form-check form-switch p-3 border rounded bg-light">
-                                <input class="form-check-input" type="checkbox" id="gs-enable-fair-distribution" checked>
-                                <label class="form-check-label fw-bold" for="gs-enable-fair-distribution">Enable Fair Distribution</label>
-                                <div class="form-text small mt-0">If checked, the scheduler will dynamically adjust targets to ensure all users are treated equally relative to available shifts.</div>
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <h3>Global Settings</h3>
+                            <p class="text-muted small mb-0">Defaults for users without specific preferences.</p>
+                        </div>
+                        <button type="button" class="btn btn-primary" onclick="saveGlobalSettings()"><i class="bi bi-check-circle"></i> Save Changes</button>
+                    </div>
+
+                    <div class="toolbar-container mb-4">
+                        <h5 class="mb-3 text-primary">Defaults</h5>
+                        <div class="row g-2">
+                            <div class="col-md-3"><label class="form-label small fw-bold">Max Consecutive</label><input type="number" class="form-control form-control-sm" id="gs-max-consecutive"></div>
+                            <div class="col-md-3"><label class="form-label small fw-bold">Min Days Off</label><input type="number" class="form-control form-control-sm" id="gs-min-days-off"></div>
+                            <div class="col-md-3"><label class="form-label small fw-bold">Target Shifts</label><input type="number" class="form-control form-control-sm" id="gs-target-shifts"></div>
+                            <div class="col-md-3"><label class="form-label small fw-bold">Variance</label><input type="number" class="form-control form-control-sm" id="gs-variance"></div>
+                            <div class="col-md-3"><label class="form-label small fw-bold">Block Size</label><input type="number" class="form-control form-control-sm" id="gs-block-size"></div>
+                            <div class="col-md-3"><label class="form-label small fw-bold">Min Consec. Nights</label><input type="number" class="form-control form-control-sm" id="gs-min-consecutive-nights" value="2"></div>
+                            <div class="col-md-3"><label class="form-label small fw-bold">Min Rest (Hrs)</label><input type="number" class="form-control form-control-sm" id="gs-min-rest-hours" value="12" step="0.5"></div>
+                            <div class="col-12 mt-3">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="gs-enable-fair-distribution" checked>
+                                    <label class="form-check-label fw-bold small" for="gs-enable-fair-distribution">Enable Fair Distribution Mode</label>
+                                </div>
+                                <div class="text-muted small ms-4" style="margin-top: -5px;">Dynamically adjust targets based on total shifts vs users.</div>
                             </div>
                         </div>
                     </div>
 
-                    <hr class="my-4">
+                    <div class="toolbar-container">
+                        <h5 class="mb-3 text-primary">Rule Configuration (Weights)</h5>
+                        <div class="alert alert-secondary py-2 small mb-3">
+                            <strong>10 = Hard Rule</strong> (Strict) &bull; <strong>1-9 = Soft Rule</strong> (Priority). Lower weight = easier to break.
+                        </div>
 
-                    <h4>Rule Configuration (Weights)</h4>
-                    <p class="text-muted small">Configure the importance of each rule. <strong>10 = Hard Rule</strong> (Cannot be broken unless forced). <strong>1-9 = Soft Rule</strong> (Higher number means higher penalty for breaking).</p>
-
-                    <div class="table-responsive" style="max-width: 800px;">
-                        <table class="table table-bordered table-striped">
-                            <thead class="table-dark">
-                                <tr>
-                                    <th>Rule Name</th>
-                                    <th>Weight (1-10)</th>
-                                    <th>Description</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td>Availability (Days/Shifts)</td>
-                                    <td><input type="number" class="form-control" id="rw-availability" min="1" max="10" value="10"></td>
-                                    <td><small class="text-muted">Respect user's blocked days or specific shift blocks.</small></td>
-                                </tr>
-                                <tr>
-                                    <td>Request Off</td>
-                                    <td><input type="number" class="form-control" id="rw-request-off" min="1" max="10" value="10"></td>
-                                    <td><small class="text-muted">Respect user's "Off" requests.</small></td>
-                                </tr>
-                                <tr>
-                                    <td>Request Work (Specific)</td>
-                                    <td><input type="number" class="form-control" id="rw-request-work-specific" min="1" max="10" value="10"></td>
-                                    <td><small class="text-muted">Bonus for granting a specific shift request (Green).</small></td>
-                                </tr>
-                                <tr>
-                                    <td>Request Work (Any)</td>
-                                    <td><input type="number" class="form-control" id="rw-request-work" min="1" max="10" value="10"></td>
-                                    <td><small class="text-muted">Bonus for granting a general work request.</small></td>
-                                </tr>
-                                <tr>
-                                    <td>Request Avoid Shift</td>
-                                    <td><input type="number" class="form-control" id="rw-request-avoid-shift" min="1" max="10" value="10"></td>
-                                    <td><small class="text-muted">Penalty for assigning a shift marked as "Avoid" (Orange).</small></td>
-                                </tr>
-                                <tr>
-                                    <td>Max Consecutive Shifts</td>
-                                    <td><input type="number" class="form-control" id="rw-max-consecutive" min="1" max="10" value="10"></td>
-                                    <td><small class="text-muted">Do not exceed the maximum number of consecutive working days.</small></td>
-                                </tr>
-                                <tr>
-                                    <td>Min Days Off</td>
-                                    <td><input type="number" class="form-control" id="rw-min-days-off" min="1" max="10" value="10"></td>
-                                    <td><small class="text-muted">Ensure users get the minimum number of days off after a block of shifts.</small></td>
-                                </tr>
-                                <tr>
-                                    <td>Target Shift Variance</td>
-                                    <td><input type="number" class="form-control" id="rw-target-variance" min="1" max="10" value="10"></td>
-                                    <td><small class="text-muted">Do not exceed the target number of shifts by more than the allowed variance.</small></td>
-                                </tr>
-                                <tr>
-                                    <td>Min Rest Hours (Hard)</td>
-                                    <td><input type="number" class="form-control" id="rw-min-rest-hours" min="1" max="10" value="10"></td>
-                                    <td><small class="text-muted">Enforce minimum hours off between any two shifts.</small></td>
-                                </tr>
-                                <tr>
-                                    <td>Circadian (Strict)</td>
-                                    <td><input type="number" class="form-control" id="rw-circadian-strict" min="1" max="10" value="10"></td>
-                                    <td><small class="text-muted">Prevent a Day shift immediately following a Night shift (less than 24h rest).</small></td>
-                                </tr>
-                                <tr>
-                                    <td>Circadian (Soft)</td>
-                                    <td><input type="number" class="form-control" id="rw-circadian-soft" min="1" max="10" value="5"></td>
-                                    <td><small class="text-muted">Prefer more than 1 day off when switching from Night to Day.</small></td>
-                                </tr>
-                                <tr>
-                                    <td>Min Consecutive Nights</td>
-                                    <td><input type="number" class="form-control" id="rw-min-consecutive-nights" min="1" max="10" value="5"></td>
-                                    <td><small class="text-muted">Avoid single night shifts. Prefer blocks of nights.</small></td>
-                                </tr>
-                                <tr>
-                                    <td>Preferred Block Size</td>
-                                    <td><input type="number" class="form-control" id="rw-block-size" min="1" max="10" value="5"></td>
-                                    <td><small class="text-muted">Try to group shifts into blocks of the preferred size.</small></td>
-                                </tr>
-                                <tr>
-                                    <td>Weekend Fairness</td>
-                                    <td><input type="number" class="form-control" id="rw-weekend-fairness" min="1" max="10" value="5"></td>
-                                    <td><small class="text-muted">Distribute weekend shifts evenly among users.</small></td>
-                                </tr>
-                            </tbody>
-                        </table>
+                        <div class="table-responsive">
+                            <table class="table table-dark table-bordered table-striped table-sm small mb-0">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th style="width: 30%">Rule Name</th>
+                                        <th style="width: 15%">Weight</th>
+                                        <th>Description</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>Availability</td>
+                                        <td><input type="number" class="form-control form-control-sm" id="rw-availability" min="1" max="10" value="10"></td>
+                                        <td class="text-muted">Respect blocked days/shifts.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Request Off</td>
+                                        <td><input type="number" class="form-control form-control-sm" id="rw-request-off" min="1" max="10" value="10"></td>
+                                        <td class="text-muted">Respect "Off" requests.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Request Work (Specific)</td>
+                                        <td><input type="number" class="form-control form-control-sm" id="rw-request-work-specific" min="1" max="10" value="10"></td>
+                                        <td class="text-muted">Bonus for specific shift request (Green).</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Request Work (Any)</td>
+                                        <td><input type="number" class="form-control form-control-sm" id="rw-request-work" min="1" max="10" value="10"></td>
+                                        <td class="text-muted">Bonus for general work request.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Request Avoid</td>
+                                        <td><input type="number" class="form-control form-control-sm" id="rw-request-avoid-shift" min="1" max="10" value="10"></td>
+                                        <td class="text-muted">Penalty for "Avoid" shift (Orange).</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Max Consecutive</td>
+                                        <td><input type="number" class="form-control form-control-sm" id="rw-max-consecutive" min="1" max="10" value="10"></td>
+                                        <td class="text-muted">Limit consecutive working days.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Min Days Off</td>
+                                        <td><input type="number" class="form-control form-control-sm" id="rw-min-days-off" min="1" max="10" value="10"></td>
+                                        <td class="text-muted">Enforce minimum rest days after block.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Target Variance</td>
+                                        <td><input type="number" class="form-control form-control-sm" id="rw-target-variance" min="1" max="10" value="10"></td>
+                                        <td class="text-muted">Stick close to target shift count.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Min Rest Hours</td>
+                                        <td><input type="number" class="form-control form-control-sm" id="rw-min-rest-hours" min="1" max="10" value="10"></td>
+                                        <td class="text-muted">Minimum hours between shifts.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Circadian (Strict)</td>
+                                        <td><input type="number" class="form-control form-control-sm" id="rw-circadian-strict" min="1" max="10" value="10"></td>
+                                        <td class="text-muted">No Day shift immediately after Night.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Circadian (Soft)</td>
+                                        <td><input type="number" class="form-control form-control-sm" id="rw-circadian-soft" min="1" max="10" value="5"></td>
+                                        <td class="text-muted">Prefer >24h rest after Night block.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Min Consec. Nights</td>
+                                        <td><input type="number" class="form-control form-control-sm" id="rw-min-consecutive-nights" min="1" max="10" value="5"></td>
+                                        <td class="text-muted">Avoid single night shifts.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Block Size</td>
+                                        <td><input type="number" class="form-control form-control-sm" id="rw-block-size" min="1" max="10" value="5"></td>
+                                        <td class="text-muted">Group shifts into preferred blocks.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Weekend Fairness</td>
+                                        <td><input type="number" class="form-control form-control-sm" id="rw-weekend-fairness" min="1" max="10" value="5"></td>
+                                        <td class="text-muted">Even distribution of weekends.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-
-                    <div class="mt-3"><button type="button" class="btn btn-primary" onclick="saveGlobalSettings()"><i class="bi bi-check-circle"></i> Save All Settings</button></div>
                 </div>
 
                 <!-- Users Section -->
