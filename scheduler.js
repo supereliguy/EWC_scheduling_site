@@ -1424,7 +1424,7 @@ const runGreedy = ({
                         date: slot.date,
                         shiftId: slot.shift.id,
                         shiftName: slot.shift.name,
-                        failures: sacrificeCandidates.map(c => ({ username: c.user.username, reason: c.failReason }))
+                        failures: sacrificeCandidates.map(c => ({ username: c.user.username, reason: c.failReason, userId: c.user.id }))
                      });
                      totalScore -= 10000;
                  }
@@ -1438,8 +1438,11 @@ const runGreedy = ({
                      const strictWeights = { max_consecutive: 10, min_days_off: 10, target_variance: 10, availability: 10, request_off: 10, circadian_strict: 10, min_rest_hours: 10, request_avoid_shift: 10 };
                      const currentCount = userCounts[u.id];
                      const check = checkConstraintsBiDirectional(u, slot.shift, slot.date, slot.dateObj, assignmentsMap, settings, req, strictWeights, site, currentCount);
-                     return { username: u.username, reason: check.reason };
+                     return { username: u.username, reason: check.reason, userId: u.id };
                  }).filter(f => f !== null);
+
+                 // Sort by username to keep UI stable
+                 failures.sort((a,b) => a.username.localeCompare(b.username));
 
                  conflictReport.push({
                     date: slot.date,
