@@ -86,14 +86,16 @@ function renderUsers() {
         const tdActions = document.createElement('td');
 
         const btnPref = document.createElement('button');
-        btnPref.textContent = 'Preferences';
+        btnPref.className = 'btn btn-sm btn-outline-secondary';
+        btnPref.innerHTML = '<i class="bi bi-sliders"></i> Prefs';
         btnPref.onclick = () => window.openSettings(u.id);
         tdActions.appendChild(btnPref);
 
         tdActions.appendChild(document.createTextNode(' '));
 
         const btnDel = document.createElement('button');
-        btnDel.textContent = 'Delete';
+        btnDel.className = 'btn btn-sm btn-outline-danger';
+        btnDel.innerHTML = '<i class="bi bi-trash"></i>';
         btnDel.onclick = () => window.deleteUser(u.id);
         tdActions.appendChild(btnDel);
 
@@ -723,27 +725,29 @@ function renderSites() {
         const tdActions = document.createElement('td');
 
         const btnEnter = document.createElement('button');
-        btnEnter.className = 'btn btn-success fw-bold px-3';
+        btnEnter.className = 'btn btn-sm btn-success fw-bold';
         btnEnter.onclick = () => enterSite(s.id);
-        btnEnter.textContent = 'Enter Dashboard';
+        btnEnter.innerHTML = '<i class="bi bi-box-arrow-in-right"></i> Dashboard';
         tdActions.appendChild(btnEnter);
 
         const btnUsers = document.createElement('button');
         btnUsers.className = 'btn btn-sm btn-secondary ms-2';
         btnUsers.onclick = () => openSiteUsersModal(s.id);
-        btnUsers.textContent = 'Users';
+        btnUsers.innerHTML = '<i class="bi bi-people"></i>';
+        btnUsers.title = 'Manage Users';
         tdActions.appendChild(btnUsers);
 
         const btnShifts = document.createElement('button');
         btnShifts.className = 'btn btn-sm btn-info ms-1';
         btnShifts.onclick = () => loadShifts(s.id);
-        btnShifts.textContent = 'Shifts';
+        btnShifts.innerHTML = '<i class="bi bi-clock"></i>';
+        btnShifts.title = 'Manage Shifts';
         tdActions.appendChild(btnShifts);
 
         const btnDelete = document.createElement('button');
         btnDelete.className = 'btn btn-sm btn-danger ms-1';
         btnDelete.onclick = () => deleteSite(s.id);
-        btnDelete.textContent = 'Delete';
+        btnDelete.innerHTML = '<i class="bi bi-trash"></i>';
         tdActions.appendChild(btnDelete);
 
         tr.appendChild(tdActions);
@@ -1236,7 +1240,7 @@ function renderShifts() {
         const tdActions = document.createElement('td');
         const btnDel = document.createElement('button');
         btnDel.className = 'btn btn-sm btn-danger';
-        btnDel.textContent = 'Delete';
+        btnDel.innerHTML = '<i class="bi bi-trash"></i>';
         btnDel.onclick = () => window.deleteShift(s.id);
         tdActions.appendChild(btnDel);
         tr.appendChild(tdActions);
@@ -1410,9 +1414,9 @@ function renderConflictReport(report, rejectionCounts, effectiveUserSettings, is
                         <td>${escapeHTML(f.username)}</td>
                         <td class="text-danger">${escapeHTML(f.reason)}</td>
                         <td>
-                            <button class="btn btn-xs btn-outline-danger py-0 px-2"
+                            <button class="btn btn-sm btn-outline-danger py-0 px-2"
                                 onclick="forceAssignUser(${siteId}, '${item.date}', '${item.shiftId}', ${f.userId}, this)">
-                                Force
+                                <i class="bi bi-exclamation-triangle"></i> Force
                             </button>
                         </td>
                     </tr>`;
@@ -2099,7 +2103,7 @@ window.loadSnapshots = async () => {
                 <tr>
                     <td>${new Date(s.created_at).toLocaleString()}</td>
                     <td>${escapeHTML(s.description)}</td>
-                    <td><button class="btn btn-sm btn-warning" onclick="restoreSnapshot(${s.id})">Restore</button></td>
+                    <td><button class="btn btn-sm btn-warning" onclick="restoreSnapshot(${s.id})"><i class="bi bi-arrow-counterclockwise"></i> Restore</button></td>
                 </tr>
             `;
         });
@@ -2148,8 +2152,8 @@ function renderCategories() {
                 <td><div style="width: 20px; height: 20px; background-color: ${escapeHTML(c.color)}; border: 1px solid #ccc;"></div></td>
                 <td>${flags.join(' ')}</td>
                 <td>
-                    <button class="btn btn-sm btn-primary" onclick="openCategoryModal(${c.id})">Edit</button>
-                    <button class="btn btn-sm btn-danger" onclick="deleteCategory(${c.id})">Delete</button>
+                    <button class="btn btn-sm btn-primary" onclick="openCategoryModal(${c.id})"><i class="bi bi-pencil"></i></button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteCategory(${c.id})"><i class="bi bi-trash"></i></button>
                 </td>
             </tr>
         `;
