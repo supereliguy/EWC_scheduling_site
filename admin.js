@@ -2487,3 +2487,61 @@ window.exportSchedulePDF = async () => {
         window.showToast('Export failed: ' + e.message, 'danger');
     }
 };
+
+// --- Version & Changelog ---
+window.initVersionDisplay = () => {
+    const header = document.querySelector('h1');
+    if(header && window.APP_VERSION) {
+        const versionSpan = document.createElement('span');
+        versionSpan.className = 'badge bg-secondary fs-6 ms-2 align-middle';
+        versionSpan.style.cursor = 'pointer';
+        versionSpan.title = 'Click to see what\'s new';
+        versionSpan.textContent = `v${window.APP_VERSION}`;
+        versionSpan.onclick = window.showChangelog;
+        header.appendChild(versionSpan);
+    }
+};
+
+window.showChangelog = () => {
+    const modalEl = document.getElementById('changelogModal');
+    const body = document.getElementById('changelog-body');
+    if (!modalEl || !body || !window.CHANGELOG) return;
+
+    body.innerHTML = '';
+    window.CHANGELOG.forEach(release => {
+        const div = document.createElement('div');
+        div.className = 'mb-4';
+
+        const h5 = document.createElement('h5');
+        h5.className = 'fw-bold mb-1';
+        h5.textContent = `v${release.version}`;
+        div.appendChild(h5);
+
+        if (release.date) {
+            const small = document.createElement('small');
+            small.className = 'text-muted d-block mb-2';
+            small.textContent = release.date;
+            div.appendChild(small);
+        }
+
+        const ul = document.createElement('ul');
+        ul.className = 'mb-0';
+        release.changes.forEach(change => {
+            const li = document.createElement('li');
+            li.textContent = change;
+            ul.appendChild(li);
+        });
+        div.appendChild(ul);
+        body.appendChild(div);
+    });
+
+    const modal = new bootstrap.Modal(modalEl);
+    modal.show();
+};
+
+// Auto-init version display
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', window.initVersionDisplay);
+} else {
+    window.initVersionDisplay();
+}
