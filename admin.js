@@ -436,7 +436,11 @@ window.loadGlobalSettings = async (btn) => {
         document.getElementById('gs-min-rest-hours').value = s.min_rest_hours || 12;
 
         // Fair Distribution Toggle
-        const enableFairDist = s.enable_fair_distribution !== undefined ? !!s.enable_fair_distribution : true;
+        let enableFairDist = true;
+        if (s.enable_fair_distribution !== undefined) {
+             const val = s.enable_fair_distribution;
+             enableFairDist = (val === 'true' || val === true || val === 1);
+        }
         document.getElementById('gs-enable-fair-distribution').checked = enableFairDist;
 
         // Weights
