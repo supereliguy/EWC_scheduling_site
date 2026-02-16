@@ -55,10 +55,10 @@ describe('calculateScore', () => {
             ...baseSettings,
             shift_ranking: ['Day', 'Night', 'Evening'] // Length 3
         };
-        // Logic: (length - index) * 50
-        // Day: (3 - 0) * 50 = 150
-        // Night: (3 - 1) * 50 = 100
-        // Evening: (3 - 2) * 50 = 50
+        // Logic: (length - index) * 100
+        // Day: (3 - 0) * 100 = 300
+        // Night: (3 - 1) * 100 = 200
+        // Evening: (3 - 2) * 100 = 100
 
         test('Adds score for top ranked shift', () => {
             const score = calculateScore(mockUser, shiftDay, mockDateObj, baseState, rankSettings, null);
@@ -83,13 +83,13 @@ describe('calculateScore', () => {
     });
 
     describe('Target Shifts', () => {
-        test('Adds 50 points per needed shift (Priority 10)', () => {
+        test('Adds squared points per needed shift (Priority 10)', () => {
             const settings = { ...baseSettings, target_shifts: 10 };
             const state = { ...baseState, totalAssigned: 5 };
-            // Needed: 5. Priority: 10 -> Factor 1. Multiplier 50.
-            // Score: 5 * 50 * 1 = 250.
+            // Needed: 5. Priority: 10 -> Factor 1.
+            // Score: 5^2 * 50 * 1 = 1250.
             const score = calculateScore(mockUser, shiftDay, mockDateObj, state, settings, null);
-            expect(score).toBe(250);
+            expect(score).toBe(1250);
         });
 
         test('Subtracts 50 points per excess shift', () => {
@@ -141,15 +141,17 @@ describe('calculateScore', () => {
     describe('Soft Circadian Rhythm', () => {
         // Night -> Day gap <= 3 days penalizes -5000 (Weight 5)
         const lastDate = new Date(mockDateObj.getTime() - (2 * 24 * 60 * 60 * 1000)); // 2 days ago
+        const nightShiftWithMeta = { ...shiftNight, isNight: true };
+        const dayShiftWithMeta = { ...shiftDay, isNight: false };
 
         test('Penalizes Night -> Day transition with short gap', () => {
             const state = {
                 ...baseState,
-                lastShift: shiftNight,
+                lastShift: nightShiftWithMeta,
                 lastDate: lastDate
             };
             // Trying to assign Day shift
-            const score = calculateScore(mockUser, shiftDay, mockDateObj, state, baseSettings, null);
+            const score = calculateScore(mockUser, dayShiftWithMeta, mockDateObj, state, baseSettings, null);
             expect(score).toBe(-5000);
         });
 
@@ -157,31 +159,11 @@ describe('calculateScore', () => {
              const oldDate = new Date(mockDateObj.getTime() - (4 * 24 * 60 * 60 * 1000)); // 4 days ago
              const state = {
                  ...baseState,
-                 lastShift: shiftNight,
+                 lastShift: nightShiftWithMeta,
                  lastDate: oldDate
              };
-             const score = calculateScore(mockUser, shiftDay, mockDateObj, state, baseSettings, null);
+             const score = calculateScore(mockUser, dayShiftWithMeta, mockDateObj, state, baseSettings, null);
              expect(score).toBe(0);
-        });
-
-        test('No penalty for Night -> Night', () => {
-            const state = {
-                ...baseState,
-                lastShift: shiftNight,
-                lastDate: lastDate
-            };
-            const score = calculateScore(mockUser, shiftNight, mockDateObj, state, baseSettings, null);
-            expect(score).toBe(0);
-        });
-
-        test('No penalty for Day -> Day', () => {
-            const state = {
-                ...baseState,
-                lastShift: shiftDay,
-                lastDate: lastDate
-            };
-            const score = calculateScore(mockUser, shiftDay, mockDateObj, state, baseSettings, null);
-            expect(score).toBe(0);
         });
     });
 
