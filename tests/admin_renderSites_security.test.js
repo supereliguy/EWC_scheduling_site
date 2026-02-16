@@ -21,6 +21,7 @@ describe('Admin renderSites Security', () => {
         global.openSiteUsersModal = jest.fn();
         global.loadShifts = jest.fn();
         global.deleteSite = jest.fn();
+        global.updateIntegrationsSiteSelect = jest.fn();
     });
 
     test('renderSites should use textContent to prevent XSS', () => {
