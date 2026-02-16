@@ -204,18 +204,18 @@
                 <!-- Users Section -->
                 <div id="users-section" class="section-content" style="display:block;">
                     <h3>Manage Users</h3>
-                    <div class="d-flex flex-wrap gap-2 mb-3">
-                        <div class="input-group" style="width: auto; flex-grow: 1; min-width: 300px;">
-                            <input type="text" class="form-control" id="new-username" placeholder="Username">
-                            <select class="form-select" id="new-role" style="max-width: 140px;" title="System Access Level">
+                    <div class="d-flex flex-wrap gap-2 toolbar-container align-items-center">
+                        <div class="input-group input-group-sm" style="width: auto; flex-grow: 1; min-width: 300px;">
+                            <input type="text" class="form-control form-control-sm" id="new-username" placeholder="Username">
+                            <select class="form-select form-select-sm" id="new-role" style="max-width: 140px;" title="System Access Level">
                                 <option value="user">User Access</option>
                                 <option value="admin">Admin Access</option>
                             </select>
-                            <button class="btn btn-primary" id="create-user-btn"><i class="bi bi-person-plus"></i> Create</button>
+                            <button class="btn btn-primary btn-sm" id="create-user-btn"><i class="bi bi-person-plus"></i> Create</button>
                         </div>
                         <div class="d-flex gap-2">
-                            <button class="btn btn-secondary" onclick="openBulkModal('users')"><i class="bi bi-people"></i> Bulk Add</button>
-                            <button class="btn btn-info" onclick="openBulkMetricsModal()"><i class="bi bi-graph-up"></i> Metrics</button>
+                            <button class="btn btn-secondary btn-sm" onclick="openBulkModal('users')"><i class="bi bi-people"></i> Bulk Add</button>
+                            <button class="btn btn-info btn-sm" onclick="openBulkMetricsModal()"><i class="bi bi-graph-up"></i> Metrics</button>
                         </div>
                     </div>
                     <table class="table table-bordered" id="users-table">
@@ -227,12 +227,12 @@
                 <!-- Sites Section -->
                 <div id="sites-section" class="section-content">
                     <h3>Sites</h3>
-                    <div class="d-flex flex-wrap gap-2 mb-3">
-                        <div class="input-group" style="width: auto; flex-grow: 1; min-width: 300px;">
-                            <input type="text" class="form-control" id="new-site-name" placeholder="Site Name">
-                            <button class="btn btn-primary" id="create-site-btn"><i class="bi bi-plus-lg"></i> Create Site</button>
+                    <div class="d-flex flex-wrap gap-2 toolbar-container align-items-center">
+                        <div class="input-group input-group-sm" style="width: auto; flex-grow: 1; min-width: 300px;">
+                            <input type="text" class="form-control form-control-sm" id="new-site-name" placeholder="Site Name">
+                            <button class="btn btn-primary btn-sm" id="create-site-btn"><i class="bi bi-plus-lg"></i> Create Site</button>
                         </div>
-                        <button class="btn btn-secondary" onclick="openBulkModal('sites')"><i class="bi bi-list-check"></i> Bulk Add</button>
+                        <button class="btn btn-secondary btn-sm" onclick="openBulkModal('sites')"><i class="bi bi-list-check"></i> Bulk Add</button>
                     </div>
                     <table class="table table-bordered" id="sites-table">
                         <thead><tr><th>ID</th><th>Name</th><th>Actions</th></tr></thead>
@@ -244,13 +244,13 @@
                         <h4>Shifts for <span id="current-shift-site-name"></span></h4>
                         <button class="btn btn-sm btn-secondary mb-3" onclick="closeShiftsEditor()">Close Shift Editor</button>
 
-                        <div class="card p-3 mb-3 bg-light">
+                        <div class="toolbar-container">
                             <h5>Add Shift</h5>
                             <div class="row g-2">
-                                <div class="col-md-4"><input type="text" class="form-control" id="new-shift-name" placeholder="Shift Name (e.g. Day)"></div>
-                                <div class="col-md-3"><input type="time" class="form-control" id="new-shift-start" value="08:00"></div>
-                                <div class="col-md-3"><input type="time" class="form-control" id="new-shift-end" value="16:00"></div>
-                                <div class="col-md-2"><input type="number" class="form-control" id="new-shift-staff" placeholder="Qty" value="1"></div>
+                                <div class="col-md-4"><input type="text" class="form-control form-control-sm" id="new-shift-name" placeholder="Shift Name (e.g. Day)"></div>
+                                <div class="col-md-3"><input type="time" class="form-control form-control-sm" id="new-shift-start" value="08:00"></div>
+                                <div class="col-md-3"><input type="time" class="form-control form-control-sm" id="new-shift-end" value="16:00"></div>
+                                <div class="col-md-2"><input type="number" class="form-control form-control-sm" id="new-shift-staff" placeholder="Qty" value="1"></div>
                                 <div class="col-12 mt-2">
                                     <label class="form-label small fw-bold mb-1">Active Days:</label><br>
                                     <div class="form-check form-check-inline"><input class="form-check-input shift-day-check" type="checkbox" value="0" checked id="sd-0"><label class="form-check-label small" for="sd-0">Sun</label></div>
@@ -262,7 +262,7 @@
                                     <div class="form-check form-check-inline"><input class="form-check-input shift-day-check" type="checkbox" value="6" checked id="sd-6"><label class="form-check-label small" for="sd-6">Sat</label></div>
                                 </div>
                             </div>
-                            <button class="btn btn-primary mt-2" id="create-shift-btn">Add Shift</button>
+                            <button class="btn btn-primary btn-sm mt-2" id="create-shift-btn">Add Shift</button>
                         </div>
                         <table class="table table-bordered" id="shifts-table">
                             <thead><tr><th>Name</th><th>Times</th><th>Staff</th><th>Actions</th></tr></thead>
@@ -292,7 +292,7 @@
                         <!-- Schedule Editor -->
                         <div class="tab-pane fade show active" id="sd-schedule">
                             <!-- New Controls -->
-                            <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 p-3 rounded gap-3" style="background-color: #161b22; border: 1px solid #30363d;">
+                            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 toolbar-container">
                                 <div class="d-flex align-items-center gap-2">
                                     <button class="btn btn-sm btn-secondary" onclick="changeMonth(-1)" title="Previous Month"><i class="bi bi-chevron-left"></i></button>
                                     <input type="month" id="schedule-month-picker" class="form-control form-control-sm" style="width: auto;" onchange="onMonthPickerChange()" title="Select Month">
@@ -357,7 +357,7 @@
                         <div class="tab-pane fade" id="sd-categories">
                             <div class="d-flex justify-content-between align-items-center mb-3">
                                 <h4>Staff Roles</h4>
-                                <button class="btn btn-primary" onclick="openCategoryModal()">Add Role</button>
+                                <button class="btn btn-primary btn-sm" onclick="openCategoryModal()">Add Role</button>
                             </div>
                             <p class="text-muted small">
                                 Define roles for your staff.
@@ -383,10 +383,10 @@
                                 <div class="col-12">
                                     <label class="form-label fw-bold">Weekend Definition</label>
                                     <p class="text-muted small mb-2">Define when the weekend starts and ends. Shifts starting within this window are counted as weekend shifts.</p>
-                                    <div class="row g-2 p-3 border rounded bg-light">
+                                    <div class="row g-2 toolbar-container">
                                         <div class="col-md-6">
                                             <label class="small fw-bold">Start Day</label>
-                                            <select class="form-select" id="site-weekend-start-day">
+                                            <select class="form-select form-select-sm" id="site-weekend-start-day">
                                                 <option value="0">Sunday</option>
                                                 <option value="1">Monday</option>
                                                 <option value="2">Tuesday</option>
@@ -398,11 +398,11 @@
                                         </div>
                                         <div class="col-md-6">
                                             <label class="small fw-bold">Start Time</label>
-                                            <input type="time" class="form-control" id="site-weekend-start-time">
+                                            <input type="time" class="form-control form-control-sm" id="site-weekend-start-time">
                                         </div>
                                         <div class="col-md-6">
                                             <label class="small fw-bold">End Day</label>
-                                            <select class="form-select" id="site-weekend-end-day">
+                                            <select class="form-select form-select-sm" id="site-weekend-end-day">
                                                 <option value="0">Sunday</option>
                                                 <option value="1">Monday</option>
                                                 <option value="2">Tuesday</option>
@@ -414,12 +414,12 @@
                                         </div>
                                         <div class="col-md-6">
                                             <label class="small fw-bold">End Time</label>
-                                            <input type="time" class="form-control" id="site-weekend-end-time">
+                                            <input type="time" class="form-control form-control-sm" id="site-weekend-end-time">
                                         </div>
                                     </div>
                                 </div>
                                 <div class="col-12 mt-3">
-                                    <button class="btn btn-primary" onclick="saveSiteSettings()"><i class="bi bi-check-lg"></i> Save Settings</button>
+                                    <button class="btn btn-primary btn-sm" onclick="saveSiteSettings()"><i class="bi bi-check-lg"></i> Save Settings</button>
                                 </div>
                             </div>
                         </div>

@@ -371,3 +371,12 @@ a:hover {
 .shift-pill.off:hover {
     background-color: rgba(218, 54, 51, 0.4);
 }
+
+/* Toolbar Container */
+.toolbar-container {
+    background-color: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
