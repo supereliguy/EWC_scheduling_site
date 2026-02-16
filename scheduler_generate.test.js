@@ -118,22 +118,20 @@ describe('generateSchedule', () => {
         expect(mockDb.transaction).not.toHaveBeenCalled();
     });
 
-    test('should succeed with conflicts if force=true', async () => {
-        // User requests OFF. Strict fails. Force ignores it.
+    test('should succeed with conflicts if force=true (Soft) or leave empty (Hard)', async () => {
+        // User requests OFF. Strict fails (Hard Constraint). Force Mode should leave it empty.
         mockData.shifts = [{ id: 1, name: 'Day', start_time: '08:00', end_time: '16:00', required_staff: 1, days_of_week: '0,1,2,3,4,5,6' }];
         mockData.users = [{ id: 1, username: 'user1', role: 'user', category_priority: 10 }];
         mockData.requests = [{ user_id: 1, date: '2023-01-01', type: 'off' }];
 
         const result = await generateSchedule({ siteId: 1, startDate: '2023-01-01', days: 1, force: true });
 
-        // Force mode should fill the slot
-        expect(result.assignments).toHaveLength(1);
-        expect(result.assignments[0]).toMatchObject({
-            userId: 1,
-            shiftId: 1,
-            isHit: true
-        });
+        // Hard Constraint -> Empty Slot
+        expect(result.assignments).toHaveLength(0);
+        expect(result.conflictReport).toHaveLength(1);
+        expect(result.conflictReport[0].failures[0].reason).toContain('Requested Off');
 
+        // But we still call transaction to save other assignments (if any)
         expect(result.success).toBe(false);
         expect(mockDb.transaction).toHaveBeenCalled();
     });
@@ -200,5 +198,31 @@ describe('generateSchedule', () => {
         // They just update state.
         // So success should be true.
         expect(result.success).toBe(true);
+    });
+
+    test('should respect Fair Distribution toggle', async () => {
+        // Scenario:
+        // Shift needs 10 slots over 10 days (1 per day).
+        // User target is 1.
+        // If Fair Dist is ON: User target scales to 10.
+        // If Fair Dist is OFF: User target stays 1.
+
+        mockData.shifts = [{ id: 1, name: 'Day', start_time: '08:00', end_time: '16:00', required_staff: 1, days_of_week: '0,1,2,3,4,5,6' }];
+        mockData.users = [{ id: 1, username: 'user1', role: 'user', category_priority: 10 }];
+        mockData.userSettings = [{ user_id: 1, target_shifts: 1 }]; // Very low target
+
+        // 1. Enable Fair Dist (Default / "true")
+        mockData.globalSettings = [{ key: 'enable_fair_distribution', value: 'true' }];
+
+        let result = await generateSchedule({ siteId: 1, startDate: '2023-01-01', days: 10, force: true });
+
+        expect(result.effectiveUserSettings[1].target_shifts).toBe(10);
+
+        // 2. Disable Fair Dist
+        mockData.globalSettings = [{ key: 'enable_fair_distribution', value: 'false' }];
+
+        result = await generateSchedule({ siteId: 1, startDate: '2023-01-01', days: 10, force: true });
+
+        expect(result.effectiveUserSettings[1].target_shifts).toBe(1);
     });
 });

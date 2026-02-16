@@ -1101,9 +1101,11 @@ const runGreedy = ({
                         if (a.priority !== b.priority) return b.priority - a.priority;
                         return a.hits - b.hits;
                     });
+                    // Filter out Hard Constraints from sacrifice list
+                    const validSacrificeCandidates = sacrificeCandidates.filter(c => !isHardConstraint(c.failReason, ruleWeights));
 
-                    if (sacrificeCandidates.length > 0) {
-                        const victim = sacrificeCandidates[0];
+                    if (validSacrificeCandidates.length > 0) {
+                        const victim = validSacrificeCandidates[0];
                         assignments.push({
                             date: dateStr,
                             shiftId: shift.id,
@@ -1128,7 +1130,23 @@ const runGreedy = ({
                         totalScore -= 5000;
 
                     } else {
-                        conflictReport.push({ date: dateStr, shiftId: shift.id, shiftName: shift.name, reason: "No available users (all working)" });
+                        // All candidates blocked by Hard Constraints (or already working)
+                        const failures = users.filter(u => !assignedToday.has(u.id)).map(u => {
+                            const state = userState[u.id];
+                            const settings = userSettings[u.id];
+                            const req = requestsMap[dateStr] ? requestsMap[dateStr][u.id] : undefined;
+                            // Check strictly to show why they failed
+                            const strictWeights = { max_consecutive: 10, min_days_off: 10, target_variance: 10, availability: 10, request_off: 10, circadian_strict: 10, min_rest_hours: 10, request_avoid_shift: 10 };
+                            const check = checkConstraints(u, shift, dateStr, dateObj, state, settings, req, strictWeights);
+                            return { username: u.username, reason: check.reason };
+                        });
+
+                        conflictReport.push({
+                            date: dateStr,
+                            shiftId: shift.id,
+                            shiftName: shift.name,
+                            failures
+                        });
                         totalScore -= 10000;
                     }
                 } else {
