@@ -1415,7 +1415,7 @@ function renderConflictReport(report, rejectionCounts, effectiveUserSettings, is
                         <td class="text-danger">${escapeHTML(f.reason)}</td>
                         <td>
                             <button class="btn btn-sm btn-outline-danger py-0 px-2"
-                                onclick="forceAssignUser(${siteId}, '${item.date}', '${item.shiftId}', ${f.userId}, this)">
+                                onclick="forceAssignUser(${siteId}, '${escapeHTML(item.date)}', '${escapeHTML(item.shiftId)}', ${f.userId}, this)">
                                 <i class="bi bi-exclamation-triangle"></i> Force
                             </button>
                         </td>
